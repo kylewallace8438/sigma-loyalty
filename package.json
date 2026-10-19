@@ -24,7 +24,8 @@
     "node": ">=20.19 <22 || >=22.12"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.3",
+    "@prisma/adapter-mariadb": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "@react-router/dev": "7.18.2",
     "@react-router/fs-routes": "7.18.2",
     "@react-router/node": "7.18.2",
@@ -32,8 +33,11 @@
     "@shopify/app-bridge-react": "^4.2.4",
     "@shopify/shopify-app-react-router": "^1.2.1",
     "@shopify/shopify-app-session-storage-prisma": "^9.0.0",
+    "dotenv": "^18.0.8",
     "isbot": "^5.1.31",
-    "prisma": "^6.16.3",
+    "pino": "^10.4.0",
+    "pino-roll": "^4.0.0",
+    "prisma": "^7.10.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router": "7.18.2",
@@ -55,6 +59,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
     "graphql-config": "^5.1.1",
+    "pino-pretty": "^13.2.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.3",
     "vite": "^6.3.6"
@@ -67,7 +72,11 @@
   ],
   "overrides": {
     "p-map": "^4.0.0",
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "@shopify/shopify-app-session-storage-prisma": {
+      "prisma": "$prisma",
+      "@prisma/client": "$@prisma/client"
+    }
   },
   "resolutions": {
     "qs": "^6.16.0"

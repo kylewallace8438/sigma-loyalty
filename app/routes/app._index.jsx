@@ -131,14 +131,14 @@ export default function Index() {
   const generateProduct = () => fetcher.submit({}, { method: "POST" });
 
   return (
-    <s-page heading="Shopify app template">
+    <s-page heading="Sigma Loyalty">
       <s-button slot="primary-action" onClick={generateProduct}>
         Generate a product
       </s-button>
 
       <s-section heading="Congrats on creating a new Shopify app 🎉">
         <s-paragraph>
-          This embedded app template uses{" "}
+          This embedded app template uses 
           <s-link
             href="https://shopify.dev/docs/apps/tools/app-bridge"
             target="_blank"
