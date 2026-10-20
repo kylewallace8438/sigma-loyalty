@@ -1,5 +1,10 @@
+.git
 .cache
+.react-router
+.shopify
 build
 node_modules
 logs
 .env
+.env.*
+*.pem

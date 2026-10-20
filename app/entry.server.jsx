@@ -2,7 +2,6 @@ import { PassThrough } from "stream";
 import { renderToPipeableStream } from "react-dom/server";
 import { ServerRouter } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
-import { isbot } from "isbot";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import logger from "./logger.server";
 
@@ -15,8 +14,12 @@ export default async function handleRequest(
   reactRouterContext,
 ) {
   addDocumentResponseHeaders(request, responseHeaders);
-  const userAgent = request.headers.get("user-agent");
-  const callbackName = isbot(userAgent ?? "") ? "onAllReady" : "onShellReady";
+  // Always send the fully rendered document (the template only did this for bots). With
+  // onShellReady, late Suspense boundaries are patched in by React's inline `$RC` script, which
+  // writes "$" into the node before its <template> placeholder. In the admin iframe App Bridge
+  // (a blocking script) changes the DOM first, so that node can be a text node and a stray "$"
+  // shows on every page. Loaders resolve before rendering anyway, so nothing is lost here.
+  const callbackName = "onAllReady";
 
   return new Promise((resolve, reject) => {
     const { pipe, abort } = renderToPipeableStream(

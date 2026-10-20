@@ -1,3 +1,6 @@
+// Load .env before reading SHOPIFY_APP_URL below (React Router only loads it after this file runs).
+// Variables already set by Shopify CLI or docker-compose take precedence.
+import "dotenv/config";
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -27,17 +30,20 @@ if (host === "localhost") {
     clientPort: 64999,
   };
 } else {
+  // Behind a tunnel (Shopify CLI or your own Cloudflare tunnel) the browser reaches HMR over wss:443.
+  // Without FRONTEND_PORT (set by the CLI) the HMR websocket shares the app's HTTP port, so a single
+  // tunnel hostname -> localhost:PORT mapping is enough.
   hmrConfig = {
     protocol: "wss",
     host: host,
-    port: parseInt(process.env.FRONTEND_PORT) || 8002,
+    port: parseInt(process.env.FRONTEND_PORT) || undefined,
     clientPort: 443,
   };
 }
 
 export default defineConfig({
   server: {
-    allowedHosts: [host],
+    allowedHosts: [host, "localhost"],
     cors: {
       preflightContinue: true,
     },

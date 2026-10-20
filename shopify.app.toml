@@ -1,13 +1,14 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "8038d3ae74c3a47d141574bc0a76b7d4"
-application_url = "https://example.com"
+# Public HTTPS origin of the app (your Cloudflare tunnel hostname). Keep in sync with SHOPIFY_APP_URL in .env.
+application_url = "https://sigma-loyalty.kwapp.store"
 embedded = true
 name = "Sigma Loyalty"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,write_discounts,read_discounts,read_customers"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
@@ -34,23 +35,53 @@ name = "Description"
 type = "multi_line_text_field"
 
 [webhooks]
-api_version = "2027-01"
+# Keep in sync with apiVersion in app/shopify.server.js
+api_version = "2026-07"
 
+  # Handled by: app/routes/webhooks.app.uninstalled.jsx
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
   topics = [ "app/uninstalled" ]
 
+  # Handled by: app/routes/webhooks.app.scopes_update.jsx
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/scopes_update"
   topics = [ "app/scopes_update" ]
-  
-  [[webhooks.order_fulfilled]]
+
+  # Order topics need protected customer data access (Partner Dashboard > App > API access)
+  # Handled by: app/routes/webhooks.app.order_created.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/order_created"
+  topics = [ "orders/create" ]
+
+  # Handled by: app/routes/webhooks.app.order_fulfilled.jsx
+  [[webhooks.subscriptions]]
   uri = "/webhooks/app/order_fulfilled"
-  topics = [ "order/fulfilled" ]
+  topics = [ "orders/fulfilled" ]
+
+  # Mandatory compliance webhooks (required for App Store distribution)
+  # Handled by: app/routes/webhooks.customers.data_request.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/data_request"
+  compliance_topics = [ "customers/data_request" ]
+
+  # Handled by: app/routes/webhooks.customers.redact.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/customers/redact"
+  compliance_topics = [ "customers/redact" ]
+
+  # Handled by: app/routes/webhooks.shop.redact.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/shop/redact"
+  compliance_topics = [ "shop/redact" ]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [
+  "https://sigma-loyalty.kwapp.store/auth/callback",
+  "https://sigma-loyalty.kwapp.store/auth/shopify/callback",
+  "https://sigma-loyalty.kwapp.store/api/auth/callback"
+]
 
 [build]
-include_config_on_deploy = true
-automatically_update_urls_on_dev = true
+# The app is served from your own tunnel/domain, so don't let `shopify app dev` overwrite the URLs above.
+automatically_update_urls_on_dev = false

@@ -31,3 +31,69 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+// One row per store that installed the app (created in the afterAuth hook).
+model Shop {
+  id            Int            @id @default(autoincrement())
+  domain        String         @unique // xxx.myshopify.com
+  installedAt   DateTime       @default(now())
+  uninstalledAt DateTime?
+  discountRules DiscountRule[]
+  discountCodes DiscountCode[]
+}
+
+enum DiscountType {
+  FIXED_AMOUNT
+  PERCENTAGE
+  FREE_SHIPPING
+}
+
+// A reward template: what a discount gives and what it costs in points. Stored only in the app;
+// Shopify discounts are created per DiscountCode, which copies these values when issued.
+model DiscountRule {
+  id                     Int            @id @default(autoincrement())
+  shopId                 Int
+  shop                   Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  title                  String
+  pointsCost             Int
+  discountType           DiscountType
+  discountValue          Decimal?       @db.Decimal(10, 2) // amount (FIXED_AMOUNT) or percent 1-100 (PERCENTAGE)
+  minimumSubtotal        Decimal?       @db.Decimal(10, 2)
+  usageLimit             Int?
+  appliesOncePerCustomer Boolean        @default(true)
+  active                 Boolean        @default(true) // inactive rules can't be used for new codes
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  discountCodes          DiscountCode[]
+
+  @@index([shopId])
+}
+
+// A discount code issued from a rule, optionally limited to specific customers and products.
+// Rule values are copied at creation so later rule edits don't change codes already issued.
+// Like rules, a row only exists once Shopify has created the discount (shopifyDiscountId).
+model DiscountCode {
+  id                     Int          @id @default(autoincrement())
+  shopId                 Int
+  shop                   Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  ruleId                 Int
+  rule                   DiscountRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
+  code                   String
+  title                  String
+  discountType           DiscountType
+  discountValue          Decimal?     @db.Decimal(10, 2)
+  minimumSubtotal        Decimal?     @db.Decimal(10, 2)
+  usageLimit             Int?
+  appliesOncePerCustomer Boolean
+  startsAt               DateTime
+  endsAt                 DateTime?
+  customers              Json // [{ id, displayName, email }]; empty = all customers
+  products               Json // [{ id, title }]; empty = all products
+  shopifyDiscountId      String       @unique
+  syncedAt               DateTime
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@unique([shopId, code])
+  @@index([ruleId])
+}

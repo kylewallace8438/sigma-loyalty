@@ -17,7 +17,11 @@
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "docker:dev": "prisma generate && prisma migrate deploy && react-router dev --host 0.0.0.0 --port ${PORT:-3000}",
+    "compose:dev": "mkdir -p logs && docker compose --profile dev up --build",
+    "compose:prod": "mkdir -p logs && docker compose --profile prod up -d --build",
+    "compose:down": "docker compose --profile dev --profile prod down"
   },
   "type": "module",
   "engines": {

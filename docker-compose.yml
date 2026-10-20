@@ -1,3 +1,29 @@
+# Usage (see docs/SERVER.md):
+#   docker compose --profile dev up --build      # HMR dev server   -> http://localhost:${APP_PORT:-3000}
+#   docker compose --profile prod up -d --build  # production build -> http://localhost:${APP_PORT:-3000}
+#   docker compose up -d mysql                   # database only (run the app on the host)
+# Point your Cloudflare tunnel at http://localhost:${APP_PORT:-3000}. Run only one app profile at a time.
+
+x-app: &app
+  env_file: .env
+  environment:
+    # Inside the compose network the database is reachable by service name
+    DATABASE_HOST: mysql
+    DATABASE_PORT: "3306"
+    PORT: "3000"
+  ports:
+    - "127.0.0.1:${APP_PORT:-3000}:3000"
+  depends_on:
+    mysql:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz || exit 1"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 60s
+  restart: unless-stopped
+
 services:
   mysql:
     image: mysql:8.4
@@ -21,6 +47,30 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 20s
+
+  app-dev:
+    <<: *app
+    profiles: [dev]
+    container_name: sigma-loyalty-app-dev
+    build:
+      context: .
+      target: dev
+    volumes:
+      - .:/app
+      # Keep the container's (Alpine/musl) node_modules instead of the host's
+      - app-node-modules:/app/node_modules
+
+  app:
+    <<: *app
+    profiles: [prod]
+    container_name: sigma-loyalty-app
+    build:
+      context: .
+      target: prod
+    volumes:
+      - ./logs:/app/logs
 
 volumes:
   mysql-data:
+  app-node-modules:

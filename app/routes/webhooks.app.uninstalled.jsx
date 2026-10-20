@@ -1,6 +1,7 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import logger from "../logger.server";
+import { markUninstalled } from "../services/shops.server";
 
 export const action = async ({ request }) => {
   const { shop, session, topic } = await authenticate.webhook(request);
@@ -12,6 +13,8 @@ export const action = async ({ request }) => {
   if (session) {
     await db.session.deleteMany({ where: { shop } });
   }
+  // Keep loyalty data until shop/redact (48h later) in case the merchant reinstalls.
+  await markUninstalled(shop);
 
   return new Response();
 };
