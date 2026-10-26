@@ -13,33 +13,35 @@ datasource db {
 }
 
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
 
 // One row per store that installed the app (created in the afterAuth hook).
 model Shop {
-  id            Int            @id @default(autoincrement())
-  domain        String         @unique // xxx.myshopify.com
-  installedAt   DateTime       @default(now())
-  uninstalledAt DateTime?
-  discountRules DiscountRule[]
-  discountCodes DiscountCode[]
+  id              Int             @id @default(autoincrement())
+  domain          String          @unique // xxx.myshopify.com
+  installedAt     DateTime        @default(now())
+  uninstalledAt   DateTime?
+  discountRules   DiscountRule[]
+  discountCodes   DiscountCode[]
+  customers       Customer[]
+  redeemHistories RedeemHistory[]
 }
 
 enum DiscountType {
@@ -96,4 +98,39 @@ model DiscountCode {
 
   @@unique([shopId, code])
   @@index([ruleId])
+}
+
+// A Shopify customer of a shop, with their loyalty point balance.
+model Customer {
+  id                Int             @id @default(autoincrement())
+  shopId            Int
+  shop              Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopifyCustomerId String // gid://shopify/Customer/123
+  firstName         String?
+  lastName          String?
+  email             String?
+  points            Int             @default(0)
+  shopifyCreatedAt  DateTime? // when the customer was created in Shopify
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  redeemHistories   RedeemHistory[]
+
+  @@unique([shopId, shopifyCustomerId])
+  @@index([shopId, shopifyCreatedAt])
+}
+
+// One row per points redemption. The customer is referenced by their Shopify gid;
+// shopifyDiscountId is the gid of the Shopify discount the points were exchanged for.
+model RedeemHistory {
+  id                Int      @id @default(autoincrement())
+  shopId            Int
+  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopifyCustomerId String
+  customer          Customer @relation(fields: [shopId, shopifyCustomerId], references: [shopId, shopifyCustomerId], onDelete: Cascade)
+  points            Int
+  shopifyDiscountId String // gid://shopify/DiscountCodeNode/123
+  createdAt         DateTime @default(now())
+
+  @@index([shopId, shopifyCustomerId])
+  @@index([shopId, createdAt])
 }

@@ -7,6 +7,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { ensureShop } from "./services/shops.server";
+import { startCustomerSync } from "./services/customer-sync.server";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -18,8 +19,9 @@ const shopify = shopifyApp({
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
   hooks: {
-    afterAuth: async ({ session }) => {
-      await ensureShop(session.shop);
+    afterAuth: async ({ session, admin }) => {
+      const shop = await ensureShop(session.shop);
+      startCustomerSync(admin, shop);
     },
   },
   future: {

@@ -39,7 +39,7 @@ export default function DiscountCodes() {
   }, [notice, shopify]);
 
   return (
-    <s-page heading="Discount codes">
+    <s-page heading="Discount codes" inlineSize="large">
       <s-button slot="primary-action" variant="primary" href="/app/discount-codes/new">
         Create code
       </s-button>

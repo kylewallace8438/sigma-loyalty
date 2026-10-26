@@ -81,7 +81,7 @@ export default function DiscountRules() {
   };
 
   return (
-    <s-page heading="Discount rules">
+    <s-page heading="Discount rules" inlineSize="large">
       <s-button slot="primary-action" variant="primary" href="/app/discount-rules/new">
         Create rule
       </s-button>
