@@ -1,6 +1,6 @@
 import { useLoaderData } from "react-router";
 import { authenticate } from "../shopify.server";
-import { getCustomer } from "../services/customers.server";
+import { getCustomer } from "../services/customers/customers.server";
 
 // Formatted on the server in UTC so server and client render the same text.
 const DATE = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });

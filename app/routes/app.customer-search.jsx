@@ -1,5 +1,5 @@
 import { authenticate } from "../shopify.server";
-import { searchCustomers } from "../services/shopify-customers.server";
+import { searchCustomers } from "../services/shopify/customers.server";
 
 // GET /app/customer-search?q=… — JSON used by the customer picker on the discount code form.
 export const loader = async ({ request }) => {

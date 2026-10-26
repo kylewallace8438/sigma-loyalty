@@ -1,14 +1,14 @@
 import { Form, useActionData, useLoaderData, useNavigation } from "react-router";
 import { authenticate } from "../shopify.server";
-import { DISCOUNT_TYPES } from "../services/discount-types";
+import { DISCOUNT_TYPES } from "../services/discounts/types";
 import {
   deleteRule,
   getRule,
   parseRuleForm,
   saveRule,
   toFormValues,
-} from "../services/discount-rules.server";
-import { countCodesForRule } from "../services/discount-codes.server";
+} from "../services/discounts/rules.server";
+import { countCodesForRule } from "../services/discounts/codes.server";
 
 // /app/discount-rules/new creates a rule; /app/discount-rules/:id edits one.
 // Rules are stored only in the app; discount codes (created from rules) are what reach Shopify.

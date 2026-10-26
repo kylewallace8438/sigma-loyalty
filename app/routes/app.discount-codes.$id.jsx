@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Form, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { DISCOUNT_TYPES } from "../services/discount-types";
+import { DISCOUNT_TYPES } from "../services/discounts/types";
 import {
   createCode,
   deleteCode,
@@ -11,7 +11,7 @@ import {
   parseCodeForm,
   toFormValues,
   updateCode,
-} from "../services/discount-codes.server";
+} from "../services/discounts/codes.server";
 
 // /app/discount-codes/new creates a code; /app/discount-codes/:id edits one.
 function parseId(param) {

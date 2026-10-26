@@ -2,8 +2,8 @@ import { useEffect, useRef } from "react";
 import { Form, useLoaderData, useNavigation, useSearchParams, useSubmit } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { DISCOUNT_TYPES } from "../services/discount-types";
-import { countRules, listRules, parseRuleFilters } from "../services/discount-rules.server";
+import { DISCOUNT_TYPES } from "../services/discounts/types";
+import { countRules, listRules, parseRuleFilters } from "../services/discounts/rules.server";
 
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);

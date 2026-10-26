@@ -1,7 +1,7 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import logger from "../logger.server";
-import { markUninstalled } from "../services/shops.server";
+import { markUninstalled } from "../services/shops/shops.server";
 
 export const action = async ({ request }) => {
   const { shop, session, topic } = await authenticate.webhook(request);

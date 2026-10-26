@@ -1,12 +1,12 @@
-import db from "../db.server";
-import logger from "../logger.server";
-import { ensureShop } from "./shops.server";
+import db from "../../db.server";
+import logger from "../../logger.server";
+import { ensureShop } from "../shops/shops.server";
 import {
   ShopifyDiscountError,
   createShopifyDiscount,
   deleteShopifyDiscount,
   updateShopifyDiscount,
-} from "./shopify-discounts.server";
+} from "../shopify/discounts.server";
 
 const CODE_PATTERN = /^[A-Za-z0-9_-]{3,40}$/;
 const MAX_TARGETS = 100;

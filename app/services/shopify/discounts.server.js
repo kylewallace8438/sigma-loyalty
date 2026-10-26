@@ -1,4 +1,4 @@
-import logger from "../logger.server";
+import logger from "../../logger.server";
 
 // Creates the Shopify code discount behind a DiscountCode (Admin GraphQL 2026-07).
 // Requires the write_discounts + read_discounts scopes.

@@ -1,4 +1,4 @@
-import db from "../db.server";
+import db from "../../db.server";
 
 export const CUSTOMERS_PER_PAGE = 50;
 

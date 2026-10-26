@@ -1,50 +1,19 @@
-import db from "../db.server";
-import logger from "../logger.server";
+import db from "../../db.server";
+import logger from "../../logger.server";
+import { getCustomersCount, getCustomersPage } from "../shopify/customers.server";
 
 // Shopify returns at most this many customers per call; larger shops are paged through.
 const PAGE_SIZE = 50;
-
-// Requires the read_customers scope (and protected customer data access for names/emails).
-const CUSTOMERS_COUNT = `#graphql
-  query CustomerSyncCount {
-    customersCount { count }
-  }`;
-
-const CUSTOMERS_PAGE = `#graphql
-  query CustomerSyncPage($first: Int!, $after: String) {
-    customers(first: $first, after: $after, sortKey: ID) {
-      nodes {
-        id
-        firstName
-        lastName
-        createdAt
-        defaultEmailAddress { emailAddress }
-      }
-      pageInfo { hasNextPage endCursor }
-    }
-  }`;
 
 // Latest sync progress per shop domain: { status, synced, total, startedAt, finishedAt, error }.
 // Held in memory, so it is per process and lost on restart; a running status also blocks a second sync.
 const progress = new Map();
 
-async function query(admin, document, variables) {
-  const response = await admin.graphql(document, { variables });
-  const json = await response.json();
-  if (json.errors?.length) throw new Error(json.errors[0].message);
-  return json.data;
-}
-
 // Points are left untouched on update so a re-sync never resets a balance.
-function saveCustomers(shopId, nodes) {
+function saveCustomers(shopId, customers) {
   return db.$transaction(
-    nodes.map((c) => {
-      const data = {
-        firstName: c.firstName,
-        lastName: c.lastName,
-        email: c.defaultEmailAddress?.emailAddress ?? null,
-        shopifyCreatedAt: new Date(c.createdAt),
-      };
+    customers.map((c) => {
+      const data = { firstName: c.firstName, lastName: c.lastName, email: c.email, shopifyCreatedAt: c.createdAt };
       return db.customer.upsert({
         where: { shopId_shopifyCustomerId: { shopId, shopifyCustomerId: c.id } },
         create: { shopId, shopifyCustomerId: c.id, ...data },
@@ -59,17 +28,16 @@ function saveCustomers(shopId, nodes) {
  * `onProgress({ synced, total })` is called after each page. Returns the number synced.
  */
 export async function syncCustomers(admin, shop, onProgress = () => {}) {
-  const { customersCount } = await query(admin, CUSTOMERS_COUNT);
-  const total = customersCount?.count ?? null;
+  const total = await getCustomersCount(admin);
   let after = null;
   let synced = 0;
   onProgress({ synced, total });
   do {
-    const { customers: page } = await query(admin, CUSTOMERS_PAGE, { first: PAGE_SIZE, after });
-    if (page.nodes.length) await saveCustomers(shop.id, page.nodes);
-    synced += page.nodes.length;
+    const page = await getCustomersPage(admin, { first: PAGE_SIZE, after });
+    if (page.customers.length) await saveCustomers(shop.id, page.customers);
+    synced += page.customers.length;
     onProgress({ synced, total });
-    after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+    after = page.nextCursor;
   } while (after);
   return synced;
 }

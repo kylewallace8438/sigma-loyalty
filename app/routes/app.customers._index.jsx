@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Form, useFetcher, useLoaderData, useNavigation, useRevalidator, useSubmit } from "react-router";
 import { authenticate } from "../shopify.server";
-import { ensureShop } from "../services/shops.server";
+import { ensureShop } from "../services/shops/shops.server";
 import {
   CUSTOMERS_PER_PAGE,
   countCustomers,
   listCustomers,
   parseCustomerFilters,
-} from "../services/customers.server";
-import { getCustomerSyncProgress, startCustomerSync } from "../services/customer-sync.server";
+} from "../services/customers/customers.server";
+import { getCustomerSyncProgress, startCustomerSync } from "../services/customers/sync.server";
 
 // While a sync runs, the page reloads its data this often to show progress and new rows.
 const POLL_MS = 1500;

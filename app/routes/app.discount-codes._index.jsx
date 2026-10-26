@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { useLoaderData, useSearchParams } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { DISCOUNT_TYPES } from "../services/discount-types";
-import { codeStatus, listCodes } from "../services/discount-codes.server";
+import { DISCOUNT_TYPES } from "../services/discounts/types";
+import { codeStatus, listCodes } from "../services/discounts/codes.server";
 
 const STATUS_TONE = { Active: "success", Scheduled: "info", Expired: "neutral" };
 

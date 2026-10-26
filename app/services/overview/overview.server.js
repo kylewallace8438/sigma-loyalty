@@ -1,4 +1,4 @@
-import db from "../db.server";
+import db from "../../db.server";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

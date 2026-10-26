@@ -1,4 +1,4 @@
-import db from "../db.server";
+import db from "../../db.server";
 
 /** Returns the Shop row for a myshopify domain, creating it (or clearing uninstalledAt) as needed. */
 export function ensureShop(domain) {

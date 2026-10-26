@@ -1,7 +1,7 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import logger from "../logger.server";
-import { deleteShopData } from "../services/shops.server";
+import { deleteShopData } from "../services/shops/shops.server";
 
 // Mandatory compliance webhook: sent 48 hours after a shop uninstalls the app.
 // Erase everything stored for the shop. authenticate.webhook() answers 401 on an invalid HMAC.

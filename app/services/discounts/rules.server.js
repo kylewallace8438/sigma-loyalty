@@ -1,7 +1,7 @@
-import db from "../db.server";
-import logger from "../logger.server";
-import { DISCOUNT_TYPES } from "./discount-types";
-import { ensureShop } from "./shops.server";
+import db from "../../db.server";
+import logger from "../../logger.server";
+import { DISCOUNT_TYPES } from "./types";
+import { ensureShop } from "../shops/shops.server";
 
 // Discount rules are templates stored only in the app's database. Nothing is created in Shopify
 // for a rule; Shopify discounts are created per discount code (see discount-codes.server.js).
