@@ -18,7 +18,6 @@ export default function App() {
       <s-app-nav>
         <s-link href="/app">Home</s-link>
         <s-link href="/app/discount-rules">Discount rules</s-link>
-        <s-link href="/app/discount-codes">Discount codes</s-link>
         <s-link href="/app/customers">Customers</s-link>
         <s-link href="/app/additional">Additional page</s-link>
       </s-app-nav>

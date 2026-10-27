@@ -46,7 +46,7 @@ Rules of thumb for this codebase:
    1.6 ✅ Shop record + post-install bootstrap
    1.7 🔲 Lint/test/CI pipeline
 2  Data model
-   2.1 🟡 Loyalty schema (✅ Shop, DiscountRule, DiscountCode · 🔲 Settings, Member, Ledger, Redemption)
+   2.1 🟡 Loyalty schema (✅ Shop, DiscountRule, Order · 🔲 Settings, Member, Ledger, Redemption)
    2.2 🔲 Webhook idempotency & event log
 3  Earning points
    3.1 🟡 Award pending points on order (orders/create or orders/paid)
@@ -56,7 +56,7 @@ Rules of thumb for this codebase:
    3.5 🔲 Points expiry job
 4  Redeeming points
    4.1 ✅ Rewards catalogue = discount rules (app-only templates)
-   4.1b ✅ Discount codes issued from a rule (customers, products, dates)
+   4.1b ❌ Discount codes screen (removed: points are exchanged for Shopify discounts manually)
    4.2 🔲 Redeem → generate customer-specific discount code
    4.3 🔲 Track discount usage & expire unused codes
 5  Customer-facing surfaces
@@ -238,16 +238,12 @@ model Redemption {
 
 ### 4.1 ✅ Rewards catalogue (discount rules) — **S**
 - **Pages**: `/app/discount-rules` (list with search by title, status and type filters) and `/app/discount-rules/new` or `/:id`.
-- **Model**: `DiscountRule` is a reward template stored **only in the app**: title, points cost, type (fixed / percentage / free shipping), value, minimum subtotal, usage limit per code, once per customer, active. It has no code or dates and creates nothing in Shopify.
-- **Flow**: route action → `parseRuleForm()` → `saveRule()` / `deleteRule()` in `app/services/discount-rules.server.js`. A rule with discount codes can't be deleted, and only active rules can be used for new codes.
-- Shopify discounts are created per **discount code** (4.1b).
+- **Model**: `DiscountRule` is a reward template stored **only in the app**: title, points cost, type (fixed / percentage / free shipping), value, minimum subtotal, usage limit, once per customer, active. It has no code or dates and creates nothing in Shopify.
+- **Flow**: route action → `parseRuleForm()` → `saveRule()` / `deleteRule()` in `app/services/discounts/rules.server.js`. Inactive rules are kept but retired.
+- Points are exchanged for Shopify discounts manually; the app creates no discounts.
 
-### 4.1b ✅ Discount codes (merchant-issued) — **M**
-- **Pages**: `/app/discount-codes` (list with Scheduled / Active / Expired status) and `/app/discount-codes/new` or `/:id`.
-- **Form**: choose an active rule, enter or generate a code, valid dates, customers (inline search via `/app/customer-search` → Admin `customers` query, needs **`read_customers`**), products (App Bridge `shopify.resourcePicker`). An empty selection means all customers or all products. Free-shipping rules ignore products.
-- **Model**: `DiscountCode` copies the rule's values when created (type, value, minimum, usage limits), so later rule edits don't change codes already issued. Customers and products are stored as JSON, and `shopifyDiscountId` is saved once Shopify accepts the discount.
-- **Shopify**: `context.customers.add/remove` and `customerGets.items.products.productsToAdd/productsToRemove`. Edits send only the difference, and an empty list switches back to all. The rule and code are fixed after creation.
-- **Integrity**: codes are unique across rules and codes, and a rule with codes can't be deleted.
+### 4.1b ❌ Discount codes (removed)
+- The `/app/discount-codes` pages, the `DiscountCode` table and the app's Shopify discount mutations were removed: merchants exchange points for discounts manually in Shopify, so the app doesn't duplicate Shopify's discount management. See git history for the old implementation.
 
 ### 4.2 🔲 Redeem → discount code — **M**
 - **Flow**: customer picks a reward (5.1/5.3) → server checks `balance ≥ cost` → in a DB transaction write a `REDEEM` ledger entry (−cost) → create a single-use, customer-locked discount code via the Admin API → save a `Redemption` → return the code.
@@ -384,7 +380,7 @@ Remove the template demo once 7.3 exists: `app.additional.jsx`, the product-crea
 | Scope | Needed by | Status |
 |---|---|---|
 | `read_orders` | 3.1–3.3, 4.3 | ✅ present |
-| `read_customers` | 4.1b customer picker, 3.4, 7.2 | ✅ added (needs `shopify app deploy` + approval) |
+| `read_customers` | 2.x customer sync, 3.4, 7.2 | ✅ added (needs `shopify app deploy` + approval) |
 | `write_discounts`, `read_discounts` | 4.1, 4.2 | ✅ added (needs `shopify app deploy` + merchant approval) |
 | `write_customers` | 5.4 (metafield sync) | 🔲 add if used |
 | `write_products`, `write_metaobjects`, `write_metaobject_definitions` | template demo only | remove with the demo |

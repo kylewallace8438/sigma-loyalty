@@ -75,11 +75,12 @@ To print the live route table: `npx react-router routes`.
 | `APP_PORT` | no | host port, default `3000` |
 | `DATABASE_*` | yes | see `.env.example`; compose overrides host/port to `mysql:3306` inside the network |
 | `LOG_LEVEL`, `LOG_DIR`, `LOG_FILE` | no | logs go to `./logs/current.log` in both modes |
+| `ORDER_RETENTION_DAYS` | no | stored orders older than this are deleted daily, default `30` |
 
 ## 4. Day-to-day
 
 - **Logs**: `tail -f logs/current.log | npx pino-pretty`, or `docker logs -f sigma-loyalty-app-dev` / `sigma-loyalty-app`.
-- **New migration** (dev): edit `prisma/schema.prisma`, then on the host run `npx prisma migrate dev --name <change>` (DB on `127.0.0.1:3308`). Both containers run `prisma migrate deploy` on start.
+- **New migration** (dev): edit `prisma/schema.prisma`, then on the host run `npx prisma migrate dev --name <change>` (DB on `127.0.0.1:3308`), then `docker restart sigma-loyalty-app-dev`. Both containers run `prisma generate` and `prisma migrate deploy` on start; until the dev container restarts, its Prisma Client doesn't know the new models (`db.<model>` is `undefined`).
 - **Added an npm dependency**: dev keeps `node_modules` in the `app-node-modules` volume, so rebuild it with
   `docker compose --profile dev down && docker volume rm sigma-loyalty_app-node-modules && npm run compose:dev`.
 - **Test a webhook** without placing an order:

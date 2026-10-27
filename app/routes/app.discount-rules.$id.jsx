@@ -8,10 +8,9 @@ import {
   saveRule,
   toFormValues,
 } from "../services/discounts/rules.server";
-import { countCodesForRule } from "../services/discounts/codes.server";
 
 // /app/discount-rules/new creates a rule; /app/discount-rules/:id edits one.
-// Rules are stored only in the app; discount codes (created from rules) are what reach Shopify.
+// Rules are stored only in the app; nothing is created in Shopify.
 function parseId(param) {
   if (param === "new") return null;
   const id = Number(param);
@@ -28,7 +27,6 @@ export const loader = async ({ request, params }) => {
   return {
     isNew: !rule,
     values: toFormValues(rule),
-    codeCount: rule ? await countCodesForRule(rule.id) : 0,
   };
 };
 
@@ -53,7 +51,7 @@ export const action = async ({ request, params }) => {
 };
 
 export default function DiscountRuleForm() {
-  const { isNew, values: saved, codeCount } = useLoaderData();
+  const { isNew, values: saved } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
 
@@ -88,7 +86,7 @@ export default function DiscountRuleForm() {
                 name="title"
                 value={values.title}
                 placeholder="$5 off your next order"
-                details="Shown to customers, and used in the title of discount codes issued from this rule."
+                details="Shown to customers."
                 error={errors.title}
                 required
               ></s-text-field>
@@ -145,13 +143,13 @@ export default function DiscountRuleForm() {
           <s-section heading="Limits">
             <s-stack gap="base">
               <s-number-field
-                label="Total usage limit per code"
+                label="Total usage limit"
                 name="usageLimit"
                 value={values.usageLimit}
                 min={1}
                 step={1}
                 inputMode="numeric"
-                details="Optional. How many times each discount code issued from this rule can be used."
+                details="Optional. How many times the discount can be used in total."
                 error={errors.usageLimit}
               ></s-number-field>
               <s-checkbox
@@ -164,7 +162,7 @@ export default function DiscountRuleForm() {
                 label="Active"
                 name="active"
                 value="true"
-                details="Only active rules can be used to create new discount codes."
+                details="Turn off to retire this reward without deleting it."
                 checked={values.active || undefined}
               ></s-checkbox>
             </s-stack>
@@ -181,28 +179,16 @@ export default function DiscountRuleForm() {
       <s-section slot="aside" heading="How rules work">
         <s-stack gap="base">
           <s-paragraph>
-            A rule is a reward template. It doesn&apos;t create anything in Shopify.
-            Create <s-link href="/app/discount-codes/new">discount codes</s-link> from
-            it to issue real codes for specific customers, products and dates.
-          </s-paragraph>
-          <s-paragraph color="subdued">
-            Codes copy the rule&apos;s values when they&apos;re created, so editing a rule
-            doesn&apos;t change codes already issued.
+            A rule is a reward template: what a customer gets and what it costs in points.
+            It doesn&apos;t create anything in Shopify. Exchange points for a discount manually.
           </s-paragraph>
           {!isNew && (
-            <>
-              <s-text>
-                {codeCount === 0
-                  ? "No discount codes use this rule yet."
-                  : `${codeCount} discount code${codeCount === 1 ? "" : "s"} issued from this rule.`}
-              </s-text>
-              <Form method="post">
-                <input type="hidden" name="intent" value="delete" />
-                <s-button type="submit" tone="critical" loading={deleting || undefined}>
-                  Delete rule
-                </s-button>
-              </Form>
-            </>
+            <Form method="post">
+              <input type="hidden" name="intent" value="delete" />
+              <s-button type="submit" tone="critical" loading={deleting || undefined}>
+                Delete rule
+              </s-button>
+            </Form>
           )}
         </s-stack>
       </s-section>

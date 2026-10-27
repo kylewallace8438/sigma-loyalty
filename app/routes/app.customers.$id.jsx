@@ -28,7 +28,6 @@ export const loader = async ({ request, params }) => {
       id: r.id,
       date: `${DATE_TIME.format(r.createdAt)} UTC`,
       points: r.points,
-      code: r.discountCode,
       shopifyDiscountId: numericId(r.shopifyDiscountId),
     })),
   };
@@ -78,13 +77,9 @@ export default function CustomerDetail() {
               {c.history.map((r) => (
                 <s-table-row key={r.id}>
                   <s-table-cell>
-                    {r.code ? (
-                      <s-link href={`/app/discount-codes/${r.code.id}`}>{r.code.code}</s-link>
-                    ) : (
-                      <s-link href={`shopify://admin/discounts/${r.shopifyDiscountId}`} target="_top">
-                        Discount {r.shopifyDiscountId}
-                      </s-link>
-                    )}
+                    <s-link href={`shopify://admin/discounts/${r.shopifyDiscountId}`} target="_top">
+                      Discount {r.shopifyDiscountId}
+                    </s-link>
                   </s-table-cell>
                   <s-table-cell>{r.points.toLocaleString()}</s-table-cell>
                   <s-table-cell>{r.date}</s-table-cell>

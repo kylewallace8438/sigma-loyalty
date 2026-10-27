@@ -51,23 +51,16 @@ describe("getCustomer", () => {
   it("returns null when the customer isn't in this shop", async () => {
     db.customer.findFirst.mockResolvedValue(null);
     expect(await getCustomer("a.myshopify.com", 1)).toBeNull();
-    expect(db.discountCode.findMany).not.toHaveBeenCalled();
   });
 
-  it("attaches the app discount code to each redemption when one matches", async () => {
-    db.customer.findFirst.mockResolvedValue({
-      id: 1,
-      redeemHistories: [
-        { id: 10, points: 100, shopifyDiscountId: "gid://shopify/DiscountCodeNode/1" },
-        { id: 11, points: 50, shopifyDiscountId: "gid://shopify/DiscountCodeNode/2" },
-      ],
+  it("loads the customer in this shop with their redeem history, newest first", async () => {
+    const customer = { id: 1, redeemHistories: [] };
+    db.customer.findFirst.mockResolvedValue(customer);
+
+    expect(await getCustomer("a.myshopify.com", 1)).toBe(customer);
+    expect(db.customer.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, shop: { domain: "a.myshopify.com" } },
+      include: { redeemHistories: { orderBy: { createdAt: "desc" } } },
     });
-    const code = { id: 5, code: "SAVE10", title: "Save", shopifyDiscountId: "gid://shopify/DiscountCodeNode/1" };
-    db.discountCode.findMany.mockResolvedValue([code]);
-
-    const customer = await getCustomer("a.myshopify.com", 1);
-
-    expect(customer.redeemHistories[0].discountCode).toEqual(code);
-    expect(customer.redeemHistories[1].discountCode).toBeNull();
   });
 });

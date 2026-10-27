@@ -39,9 +39,9 @@ model Shop {
   installedAt     DateTime        @default(now())
   uninstalledAt   DateTime?
   discountRules   DiscountRule[]
-  discountCodes   DiscountCode[]
   customers       Customer[]
   redeemHistories RedeemHistory[]
+  orders          Order[]
 }
 
 enum DiscountType {
@@ -51,53 +51,23 @@ enum DiscountType {
 }
 
 // A reward template: what a discount gives and what it costs in points. Stored only in the app;
-// Shopify discounts are created per DiscountCode, which copies these values when issued.
+// points are exchanged for Shopify discounts manually.
 model DiscountRule {
-  id                     Int            @id @default(autoincrement())
-  shopId                 Int
-  shop                   Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  title                  String
-  pointsCost             Int
-  discountType           DiscountType
-  discountValue          Decimal?       @db.Decimal(10, 2) // amount (FIXED_AMOUNT) or percent 1-100 (PERCENTAGE)
-  minimumSubtotal        Decimal?       @db.Decimal(10, 2)
-  usageLimit             Int?
-  appliesOncePerCustomer Boolean        @default(true)
-  active                 Boolean        @default(true) // inactive rules can't be used for new codes
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
-  discountCodes          DiscountCode[]
-
-  @@index([shopId])
-}
-
-// A discount code issued from a rule, optionally limited to specific customers and products.
-// Rule values are copied at creation so later rule edits don't change codes already issued.
-// Like rules, a row only exists once Shopify has created the discount (shopifyDiscountId).
-model DiscountCode {
   id                     Int          @id @default(autoincrement())
   shopId                 Int
   shop                   Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  ruleId                 Int
-  rule                   DiscountRule @relation(fields: [ruleId], references: [id], onDelete: Restrict)
-  code                   String
   title                  String
+  pointsCost             Int
   discountType           DiscountType
-  discountValue          Decimal?     @db.Decimal(10, 2)
+  discountValue          Decimal?     @db.Decimal(10, 2) // amount (FIXED_AMOUNT) or percent 1-100 (PERCENTAGE)
   minimumSubtotal        Decimal?     @db.Decimal(10, 2)
   usageLimit             Int?
-  appliesOncePerCustomer Boolean
-  startsAt               DateTime
-  endsAt                 DateTime?
-  customers              Json // [{ id, displayName, email }]; empty = all customers
-  products               Json // [{ id, title }]; empty = all products
-  shopifyDiscountId      String       @unique
-  syncedAt               DateTime
+  appliesOncePerCustomer Boolean      @default(true)
+  active                 Boolean      @default(true) // off = retired without deleting
   createdAt              DateTime     @default(now())
   updatedAt              DateTime     @updatedAt
 
-  @@unique([shopId, code])
-  @@index([ruleId])
+  @@index([shopId])
 }
 
 // A Shopify customer of a shop, with their loyalty point balance.
@@ -133,4 +103,35 @@ model RedeemHistory {
 
   @@index([shopId, shopifyCustomerId])
   @@index([shopId, createdAt])
+}
+
+// A customer's Shopify order, saved from the orders/create and orders/fulfilled webhooks (one row per order).
+// Guest orders can't earn points and aren't stored. Rows are short-lived: orders older than
+// ORDER_RETENTION_DAYS are deleted daily (app/services/orders/cleanup.server.js).
+// Shopify ids are stored as numbers (not gid strings) to keep the indexes small; the customer
+// isn't a relation because they may not have been synced into Customer yet.
+model Order {
+  id                Int       @id @default(autoincrement())
+  shopId            Int
+  shop              Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shopifyOrderId    BigInt // 123 in gid://shopify/Order/123
+  shopifyCustomerId BigInt // 123 in gid://shopify/Customer/123
+  name              String // #1001
+  currency          String
+  subtotalPrice     Decimal   @db.Decimal(12, 2) // after discounts, before shipping and tax
+  totalDiscounts    Decimal   @db.Decimal(12, 2)
+  totalPrice        Decimal   @db.Decimal(12, 2)
+  financialStatus   String? // pending | paid | refunded | ...
+  fulfillmentStatus String? // null (unfulfilled) | partial | fulfilled | ...
+  discountCodes     Json // ["SAVE10"]
+  lineItems         Json // [{ id, productId, variantId, quantity, price, discount, giftCard }]; see orderFromPayload
+  cancelledAt       DateTime?
+  fulfilledAt       DateTime? // latest fulfillment, once the order is fully fulfilled
+  shopifyCreatedAt  DateTime
+  shopifyUpdatedAt  DateTime // payload updated_at; an older webhook never overwrites a newer one
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([shopId, shopifyOrderId])
+  @@index([shopifyCreatedAt]) // retention cleanup, across all shops
 }

@@ -92,7 +92,7 @@ export default function DiscountRules() {
             <s-heading>Create your first discount rule</s-heading>
             <s-paragraph>
               Discount rules are the rewards customers can redeem with their
-              points. Issue discount codes from a rule on the Discount codes page.
+              points.
             </s-paragraph>
             <s-button variant="primary" href="/app/discount-rules/new">
               Create rule

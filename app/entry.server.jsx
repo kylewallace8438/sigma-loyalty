@@ -4,6 +4,9 @@ import { ServerRouter } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import logger from "./logger.server";
+import { scheduleOrderCleanup } from "./services/orders/cleanup.server";
+
+scheduleOrderCleanup();
 
 export const streamTimeout = 5000;
 

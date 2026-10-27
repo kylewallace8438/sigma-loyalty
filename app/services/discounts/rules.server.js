@@ -3,8 +3,8 @@ import logger from "../../logger.server";
 import { DISCOUNT_TYPES } from "./types";
 import { ensureShop } from "../shops/shops.server";
 
-// Discount rules are templates stored only in the app's database. Nothing is created in Shopify
-// for a rule; Shopify discounts are created per discount code (see discount-codes.server.js).
+// Discount rules are reward templates stored only in the app's database. Nothing is created in
+// Shopify for a rule: points are exchanged for discounts manually.
 
 /** Reads list filters from URL search params, ignoring unknown values. */
 export function parseRuleFilters(searchParams) {
@@ -134,19 +134,10 @@ export async function saveRule(shopDomain, id, data) {
   return { rule };
 }
 
-/** Deletes a rule. Rules that still have discount codes can't be deleted. */
+/** Deletes a rule. */
 export async function deleteRule(shopDomain, id) {
   const rule = await getRule(shopDomain, id);
   if (!rule) return { ok: true };
-
-  const codes = await db.discountCode.count({ where: { ruleId: rule.id } });
-  if (codes > 0) {
-    return {
-      errors: {
-        form: `This rule has ${codes} discount code${codes === 1 ? "" : "s"}. Delete them on the Discount codes page first.`,
-      },
-    };
-  }
 
   await db.discountRule.delete({ where: { id: rule.id } });
   logger.info({ shop: shopDomain, ruleId: rule.id }, "Discount rule deleted");

@@ -37,25 +37,10 @@ export function countCustomers(shopDomain) {
   return db.customer.count({ where: { shop: { domain: shopDomain } } });
 }
 
-/** A customer with their redeem history (newest first); each entry gets the matching app DiscountCode, if any. */
-export async function getCustomer(shopDomain, id) {
-  const customer = await db.customer.findFirst({
+/** A customer with their redeem history (newest first), or null if they aren't in this shop. */
+export function getCustomer(shopDomain, id) {
+  return db.customer.findFirst({
     where: { id, shop: { domain: shopDomain } },
     include: { redeemHistories: { orderBy: { createdAt: "desc" } } },
   });
-  if (!customer) return null;
-
-  const codes = await db.discountCode.findMany({
-    where: { shopifyDiscountId: { in: customer.redeemHistories.map((r) => r.shopifyDiscountId) } },
-    select: { id: true, code: true, title: true, shopifyDiscountId: true },
-  });
-  const codeByDiscountId = new Map(codes.map((c) => [c.shopifyDiscountId, c]));
-
-  return {
-    ...customer,
-    redeemHistories: customer.redeemHistories.map((r) => ({
-      ...r,
-      discountCode: codeByDiscountId.get(r.shopifyDiscountId) ?? null,
-    })),
-  };
 }
