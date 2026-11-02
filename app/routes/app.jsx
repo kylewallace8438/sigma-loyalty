@@ -16,8 +16,12 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       <s-app-nav>
-        <s-link href="/app">Home</s-link>
+        {/* rel="home": clicking the app name in the admin sidebar opens /app instead of the default "/" */}
+        <s-link href="/app" rel="home">
+          Home
+        </s-link>
         <s-link href="/app/discount-rules">Discount rules</s-link>
+        <s-link href="/app/gacha">Gacha</s-link>
         <s-link href="/app/customers">Customers</s-link>
         <s-link href="/app/additional">Additional page</s-link>
       </s-app-nav>

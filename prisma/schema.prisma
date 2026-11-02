@@ -50,6 +50,13 @@ enum DiscountType {
   FREE_SHIPPING
 }
 
+// Rarity tier of a rule in the gacha reward pool (see app/services/gacha/tiers.js for the odds).
+enum GachaTier {
+  WHITE
+  PURPLE
+  GOLD
+}
+
 // A reward template: what a discount gives and what it costs in points. Stored only in the app;
 // points are exchanged for Shopify discounts manually.
 model DiscountRule {
@@ -64,6 +71,7 @@ model DiscountRule {
   usageLimit             Int?
   appliesOncePerCustomer Boolean      @default(true)
   active                 Boolean      @default(true) // off = retired without deleting
+  gachaTier              GachaTier? // null = not in the gacha reward pool
   createdAt              DateTime     @default(now())
   updatedAt              DateTime     @updatedAt
 

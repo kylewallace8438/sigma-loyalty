@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Form, useLoaderData, useNavigation, useSearchParams, useSubmit } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { DISCOUNT_TYPES } from "../services/discounts/types";
+import { DISCOUNT_TYPES, formatDiscountValue } from "../services/discounts/types";
 import { countRules, listRules, parseRuleFilters } from "../services/discounts/rules.server";
 
 export const loader = async ({ request }) => {
@@ -18,17 +18,11 @@ export const loader = async ({ request }) => {
       title: rule.title,
       pointsCost: rule.pointsCost,
       type: DISCOUNT_TYPES[rule.discountType],
-      value: formatValue(rule),
+      value: formatDiscountValue(rule),
       active: rule.active,
     })),
   };
 };
-
-function formatValue(rule) {
-  if (rule.discountType === "FREE_SHIPPING") return "Free shipping";
-  if (rule.discountType === "PERCENTAGE") return `${Number(rule.discountValue)}% off`;
-  return `${Number(rule.discountValue).toFixed(2)} off`;
-}
 
 const SEARCH_DEBOUNCE_MS = 300;
 

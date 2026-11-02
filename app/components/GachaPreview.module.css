@@ -1,0 +1,96 @@
+.viewport {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 0;
+  border-radius: 12px;
+  background: #1b1d22;
+  /* Fade the cards out at both edges. */
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+}
+
+.strip {
+  display: flex;
+  gap: var(--gap);
+  will-change: transform;
+}
+
+.card {
+  flex: 0 0 var(--card);
+  height: 132px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px 10px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(180deg, #2a2d34 0%, color-mix(in srgb, var(--tier) 35%, #2a2d34) 100%);
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cardValue {
+  font-size: 12px;
+  color: rgb(255 255 255 / 0.75);
+}
+
+/* Rarity bar along the bottom of the card. */
+.cardBar {
+  height: 6px;
+  margin: 8px -10px 0;
+  background: var(--tier);
+}
+
+.won {
+  box-shadow: inset 0 0 0 2px var(--tier), 0 0 18px var(--tier);
+}
+
+/* Fixed marker in the middle of the reel. */
+.marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #f5c542;
+  box-shadow: 0 0 8px #f5c542;
+  pointer-events: none;
+}
+
+.marker::before,
+.marker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+}
+
+.marker::before {
+  top: 0;
+  border-top-color: #f5c542;
+}
+
+.marker::after {
+  bottom: 0;
+  border-bottom-color: #f5c542;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--tier);
+  vertical-align: middle;
+}
