@@ -1,20 +1,10 @@
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
-import logger from "../logger.server";
-import { markUninstalled } from "../services/shops/shops.server";
+import { enqueueWebhook } from "../services/webhooks/queue.server";
 
+// app/uninstalled (see shopify.app.toml).
+// authenticate.webhook() answers 401 on an invalid HMAC. The work runs in the queue worker
+// (app/services/webhooks/handlers.server.js); if queueing fails Shopify gets a 500 and retries.
 export const action = async ({ request }) => {
-  const { shop, session, topic } = await authenticate.webhook(request);
-
-  logger.info({ topic, shop }, "Received webhook");
-
-  // Webhook requests can trigger multiple times and after an app has already been uninstalled.
-  // If this webhook already ran, the session may have been deleted previously.
-  if (session) {
-    await db.session.deleteMany({ where: { shop } });
-  }
-  // Keep loyalty data until shop/redact (48h later) in case the merchant reinstalls.
-  await markUninstalled(shop);
-
+  await enqueueWebhook(await authenticate.webhook(request));
   return new Response();
 };

@@ -1,23 +1,10 @@
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
-import logger from "../logger.server";
+import { enqueueWebhook } from "../services/webhooks/queue.server";
 
+// app/scopes_update (see shopify.app.toml).
+// authenticate.webhook() answers 401 on an invalid HMAC. The work runs in the queue worker
+// (app/services/webhooks/handlers.server.js); if queueing fails Shopify gets a 500 and retries.
 export const action = async ({ request }) => {
-  const { payload, session, topic, shop } = await authenticate.webhook(request);
-
-  logger.info({ topic, shop }, "Received webhook");
-  const current = payload.current;
-
-  if (session) {
-    await db.session.update({
-      where: {
-        id: session.id,
-      },
-      data: {
-        scope: current.toString(),
-      },
-    });
-  }
-
+  await enqueueWebhook(await authenticate.webhook(request));
   return new Response();
 };

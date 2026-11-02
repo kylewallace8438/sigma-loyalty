@@ -76,7 +76,7 @@ Rules of thumb for this codebase:
 8  Monetisation
    8.1 🔲 App pricing plans (managed pricing)
 9  Operations & launch
-   9.1 🔲 Background jobs / queue for heavy webhook work
+   9.1 🟡 Background jobs / queue for heavy webhook work (webhook queue ✅)
    9.2 🔲 Backups, monitoring, alerting
    9.3 🔲 App Store review readiness
 ```
@@ -363,8 +363,8 @@ Remove the template demo once 7.3 exists: `app.additional.jsx`, the product-crea
 
 ## 9. Operations & launch
 
-### 9.1 🔲 Background work — **M**
-- Shopify expects a webhook response within about 5 s. Simple ledger writes are fine inline; anything slow (discount creation, metafield sync, bulk recalculation) should go to a queue (e.g. a `Job` table polled by a worker container, or BullMQ + Redis added to `docker-compose.yml`).
+### 9.1 🟡 Background work — **M**
+- ✅ Every webhook is queued in Redis (BullMQ) and processed by a worker running in the app process; see `app/services/webhooks/` and docs/SERVER.md §2. New webhook work goes in a handler in `handlers.server.js`. Other slow work (discount creation, metafield sync, bulk recalculation) can use a BullMQ queue the same way.
 - Scheduled jobs (3.5 expiry, 4.3 code expiry): a `worker` service in compose running `node scripts/worker.js` with a cron library.
 
 ### 9.2 🔲 Backups & monitoring — **S**

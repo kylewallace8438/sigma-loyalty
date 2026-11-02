@@ -1,7 +1,7 @@
 # Usage (see docs/SERVER.md):
 #   docker compose --profile dev up --build      # HMR dev server   -> http://localhost:${APP_PORT:-3000}
 #   docker compose --profile prod up -d --build  # production build -> http://localhost:${APP_PORT:-3000}
-#   docker compose up -d mysql                   # database only (run the app on the host)
+#   docker compose up -d mysql redis             # database + queue only (run the app on the host)
 # Point your Cloudflare tunnel at http://localhost:${APP_PORT:-3000}. Run only one app profile at a time.
 
 x-app: &app
@@ -10,11 +10,15 @@ x-app: &app
     # Inside the compose network the database is reachable by service name
     DATABASE_HOST: mysql
     DATABASE_PORT: "3306"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
     PORT: "3000"
   ports:
     - "127.0.0.1:${APP_PORT:-3000}:3000"
   depends_on:
     mysql:
+      condition: service_healthy
+    redis:
       condition: service_healthy
   healthcheck:
     test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz || exit 1"]
@@ -49,6 +53,22 @@ services:
       retries: 20
       start_period: 20s
 
+  # Webhook job queue (BullMQ). Append-only persistence so queued jobs survive a restart.
+  redis:
+    image: redis:7.4-alpine
+    container_name: sigma-loyalty-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app-dev:
     <<: *app
     profiles: [dev]
@@ -73,4 +93,5 @@ services:
 
 volumes:
   mysql-data:
+  redis-data:
   app-node-modules:

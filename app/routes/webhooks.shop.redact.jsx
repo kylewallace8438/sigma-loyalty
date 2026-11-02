@@ -1,18 +1,10 @@
 import { authenticate } from "../shopify.server";
-import db from "../db.server";
-import logger from "../logger.server";
-import { deleteShopData } from "../services/shops/shops.server";
+import { enqueueWebhook } from "../services/webhooks/queue.server";
 
-// Mandatory compliance webhook: sent 48 hours after a shop uninstalls the app.
-// Erase everything stored for the shop. authenticate.webhook() answers 401 on an invalid HMAC.
+// Mandatory compliance webhook: shop/redact.
+// authenticate.webhook() answers 401 on an invalid HMAC. The work runs in the queue worker
+// (app/services/webhooks/handlers.server.js); if queueing fails Shopify gets a 500 and retries.
 export const action = async ({ request }) => {
-  const { shop, topic } = await authenticate.webhook(request);
-
-  logger.info({ topic, shop }, "Compliance webhook received");
-
-  await db.session.deleteMany({ where: { shop } });
-  // Cascades to discount rules (and future loyalty tables).
-  await deleteShopData(shop);
-
+  await enqueueWebhook(await authenticate.webhook(request));
   return new Response();
 };
