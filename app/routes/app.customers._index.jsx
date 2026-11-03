@@ -9,6 +9,8 @@ import {
   parseCustomerFilters,
 } from "../services/customers/customers.server";
 import { getCustomerSyncProgress, startCustomerSync } from "../services/customers/sync.server";
+import { StatusBadge, customerStatus } from "../components/CustomerStatus";
+import { CUSTOMER_TABS } from "../services/customers/tabs";
 
 // While a sync runs, the page reloads its data this often to show progress and new rows.
 const POLL_MS = 1500;
@@ -26,6 +28,7 @@ export const loader = async ({ request }) => {
   return {
     query: filters.query,
     page: filters.page,
+    tab: filters.tab,
     shopTotal,
     pages: Math.max(1, Math.ceil(total / CUSTOMERS_PER_PAGE)),
     total,
@@ -34,6 +37,7 @@ export const loader = async ({ request }) => {
       name: [c.firstName, c.lastName].filter(Boolean).join(" ") || "—",
       email: c.email ?? "—",
       points: c.points,
+      status: customerStatus(c),
     })),
     sync: sync && {
       status: sync.status,
@@ -79,7 +83,7 @@ function syncBanner(sync) {
 }
 
 export default function Customers() {
-  const { customers, total, shopTotal, query, page, pages, sync } = useLoaderData();
+  const { customers, total, shopTotal, query, page, pages, tab, sync } = useLoaderData();
   const fetcher = useFetcher();
   const navigation = useNavigation();
   const submit = useSubmit();
@@ -139,7 +143,11 @@ export default function Customers() {
     if (searchRef.current) searchRef.current.value = "";
     submit(formRef.current, { replace: true });
   };
-  const pageHref = (n) => `?${new URLSearchParams({ ...(query && { q: query }), page: String(n) })}`;
+  const listHref = ({ tab: t = tab, page: n = 1 }) => {
+    const params = { ...(t !== "all" && { tab: t }), ...(query && { q: query }), ...(n > 1 && { page: String(n) }) };
+    return `?${new URLSearchParams(params)}`;
+  };
+  const pageHref = (n) => listHref({ page: n });
   const loading = navigation.state === "loading" && navigation.location?.pathname === "/app/customers";
 
   return (
@@ -176,6 +184,15 @@ export default function Customers() {
         <s-section padding="none" accessibilityLabel="Customers table">
           <s-table loading={loading || undefined}>
             <Form method="get" ref={formRef} slot="filters">
+              {tab !== "all" && <input type="hidden" name="tab" value={tab} />}
+              <s-stack gap="small-200">
+                <s-button-group gap="none" accessibilityLabel="Customer type">
+                  {Object.entries(CUSTOMER_TABS).map(([key, { label }]) => (
+                    <s-button key={key} href={listHref({ tab: key })} variant={key === tab ? "primary" : "secondary"}>
+                      {label}
+                    </s-button>
+                  ))}
+                </s-button-group>
               <s-grid gridTemplateColumns="1fr auto" gap="small-200" alignItems="center">
                 <s-text-field
                   ref={searchRef}
@@ -191,12 +208,14 @@ export default function Customers() {
                   Clear
                 </s-button>
               </s-grid>
+              </s-stack>
             </Form>
 
             <s-table-header-row>
               <s-table-header listSlot="primary">Name</s-table-header>
               <s-table-header listSlot="labeled">Email</s-table-header>
-              <s-table-header listSlot="inline" format="numeric">Points</s-table-header>
+              <s-table-header listSlot="inline">Status</s-table-header>
+              <s-table-header format="numeric">Points</s-table-header>
             </s-table-header-row>
             <s-table-body>
               {customers.map((c) => (
@@ -205,6 +224,9 @@ export default function Customers() {
                     <s-link href={`/app/customers/${c.id}`}>{c.name}</s-link>
                   </s-table-cell>
                   <s-table-cell>{c.email}</s-table-cell>
+                  <s-table-cell>
+                    <StatusBadge status={c.status} />
+                  </s-table-cell>
                   <s-table-cell>{c.points}</s-table-cell>
                 </s-table-row>
               ))}
@@ -215,7 +237,9 @@ export default function Customers() {
             <s-box padding="large">
               <s-stack gap="small" alignItems="center">
                 <s-heading>No customers found</s-heading>
-                <s-paragraph color="subdued">Try a different name or email.</s-paragraph>
+                <s-paragraph color="subdued">
+                  {query ? "Try a different name or email." : "No customers in this tab yet."}
+                </s-paragraph>
                 <s-button variant="secondary" onClick={clearSearch}>
                   Clear search
                 </s-button>

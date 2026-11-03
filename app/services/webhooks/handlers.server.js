@@ -1,5 +1,6 @@
 import db from "../../db.server";
 import logger from "../../logger.server";
+import { deleteCustomer, saveCustomer } from "../customers/customers.server";
 import { saveOrder } from "../orders/orders.server";
 import { deleteShopData, markUninstalled } from "../shops/shops.server";
 
@@ -41,6 +42,23 @@ export const handlers = {
     // TODO(WBS 3.2): confirm pending points for this order (pending -> available).
   },
 
+  async CUSTOMERS_CREATE({ shop, payload }) {
+    const result = await saveCustomer(shop, payload);
+    logger.info({ shop, customerId: payload.id, state: payload.state, result }, "Customer saved");
+    // TODO(earning rules): award the "Create account" points.
+  },
+
+  async CUSTOMERS_UPDATE({ shop, payload }) {
+    const result = await saveCustomer(shop, payload);
+    logger.info({ shop, customerId: payload.id, state: payload.state, result }, "Customer saved");
+  },
+
+  // The customer was deleted in Shopify: drop them and their loyalty history, as the original app does.
+  async CUSTOMERS_DELETE({ shop, payload }) {
+    const deleted = await deleteCustomer(shop, payload.id);
+    logger.info({ shop, customerId: payload.id, deleted }, "Customer deleted");
+  },
+
   async APP_SCOPES_UPDATE({ shop, payload }) {
     await db.session.updateMany({
       where: { shop, isOnline: false },
@@ -77,7 +95,10 @@ export const handlers = {
       { shop, customerId: payload.customer?.id, ordersToRedact: payload.orders_to_redact },
       "Customer redaction requested",
     );
-    // TODO(WBS 6.2): delete or anonymise loyalty data stored for payload.customer.id in this shop.
+    // The customer row holds their personal data; the cascade removes their points ledger and redeem
+    // history. Stored orders are left to the retention cleanup (ORDER_RETENTION_DAYS).
+    const deleted = await deleteCustomer(shop, payload.customer.id);
+    logger.info({ shop, customerId: payload.customer.id, deleted }, "Customer redacted");
   },
 
   // Mandatory compliance webhook: sent 48 hours after a shop uninstalls the app.

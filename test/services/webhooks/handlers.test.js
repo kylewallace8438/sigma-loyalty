@@ -58,6 +58,27 @@ describe("processWebhookJob", () => {
     expect(db.shop.deleteMany).toHaveBeenCalledWith({ where: { domain: DOMAIN } });
   });
 
+  it.each(["CUSTOMERS_CREATE", "CUSTOMERS_UPDATE"])("saves the customer for %s", async (topic) => {
+    db.customer.updateMany.mockResolvedValue({ count: 1 });
+
+    await processWebhookJob(job(topic, { id: 42, state: "enabled", updated_at: "2026-11-01T00:00:00Z" }));
+
+    expect(db.customer.updateMany.mock.calls[0][0].where.shopifyCustomerId).toBe("gid://shopify/Customer/42");
+  });
+
+  it.each([
+    ["CUSTOMERS_DELETE", { id: 42 }],
+    ["CUSTOMERS_REDACT", { customer: { id: 42 }, orders_to_redact: [] }],
+  ])("deletes the customer and their loyalty data on %s", async (topic, payload) => {
+    db.customer.deleteMany.mockResolvedValue({ count: 1 });
+
+    await processWebhookJob(job(topic, payload));
+
+    expect(db.customer.deleteMany).toHaveBeenCalledWith({
+      where: { shop: { domain: DOMAIN }, shopifyCustomerId: "gid://shopify/Customer/42" },
+    });
+  });
+
   it("drops jobs for unknown topics without throwing", async () => {
     await expect(processWebhookJob(job("PRODUCTS_CREATE"))).resolves.toBeUndefined();
     expect(saveOrder).not.toHaveBeenCalled();

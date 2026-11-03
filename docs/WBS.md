@@ -46,7 +46,7 @@ Rules of thumb for this codebase:
    1.6 ✅ Shop record + post-install bootstrap
    1.7 🔲 Lint/test/CI pipeline
 2  Data model
-   2.1 🟡 Loyalty schema (✅ Shop, DiscountRule, Order · 🔲 Settings, Member, Ledger, Redemption)
+   2.1 🟡 Loyalty schema (✅ Shop, DiscountRule, Order, StoreSettings, Customer state/exclusion, PointHistory ledger · 🔲 Redemption codes, VIP tiers, plans)
    2.2 🔲 Webhook idempotency & event log
 3  Earning points
    3.1 🟡 Award pending points on order (orders/create or orders/paid)
@@ -66,12 +66,12 @@ Rules of thumb for this codebase:
    5.4 🔲 Sync balance to a customer metafield (optional)
 6  Privacy & compliance
    6.1 🟡 customers/data_request
-   6.2 🟡 customers/redact
+   6.2 ✅ customers/redact (deletes the customer; ledger and redeem history cascade)
    6.3 ✅ shop/redact + app/uninstalled cleanup
    6.4 🔲 Protected customer data request (Partner Dashboard)
 7  Merchant admin UI
-   7.1 🔲 Program settings page
-   7.2 🔲 Members list & member detail (ledger, manual adjust)
+   7.1 ✅ Program settings page (/app/settings)
+   7.2 ✅ Members list (All/Members/Guests/Excluded) & member detail (ledger, adjust points, exclude)
    7.3 🔲 Dashboard metrics
 8  Monetisation
    8.1 🔲 App pricing plans (managed pricing)

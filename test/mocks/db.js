@@ -1,6 +1,6 @@
 import { beforeEach, vi } from "vitest";
 
-const MODELS = ["session", "shop", "customer", "redeemHistory", "discountRule", "order"];
+const MODELS = ["session", "shop", "customer", "redeemHistory", "discountRule", "order", "gachaSettings", "pointHistory", "storeSettings"];
 const METHODS = ["findMany", "findFirst", "findUnique", "count", "create", "update", "upsert", "delete", "deleteMany", "updateMany"];
 
 /** Prisma client stand-in: every model method is a vi.fn() (reset before each test). */

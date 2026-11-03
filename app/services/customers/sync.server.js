@@ -13,7 +13,13 @@ const progress = new Map();
 function saveCustomers(shopId, customers) {
   return db.$transaction(
     customers.map((c) => {
-      const data = { firstName: c.firstName, lastName: c.lastName, email: c.email, shopifyCreatedAt: c.createdAt };
+      const data = {
+        firstName: c.firstName,
+        lastName: c.lastName,
+        email: c.email,
+        state: c.state,
+        shopifyCreatedAt: c.createdAt,
+      };
       return db.customer.upsert({
         where: { shopId_shopifyCustomerId: { shopId, shopifyCustomerId: c.id } },
         create: { shopId, shopifyCustomerId: c.id, ...data },

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { db } from "../../mocks/db";
-import { listGachaRules, parseTierForm, saveTiers } from "../../../app/services/gacha/gacha.server";
+import {
+  getPityValues,
+  listGachaRules,
+  parsePityForm,
+  parseTierForm,
+  saveGachaSetup,
+  saveTiers,
+} from "../../../app/services/gacha/gacha.server";
 
 const DOMAIN = "a.myshopify.com";
 
@@ -54,6 +61,54 @@ describe("saveTiers", () => {
     expect(db.discountRule.updateMany).toHaveBeenCalledWith({
       where: { shopId: 7, id: { in: [2] } },
       data: { gachaTier: null },
+    });
+  });
+});
+
+describe("getPityValues", () => {
+  it("returns the saved guarantees as form values", async () => {
+    db.gachaSettings.findFirst.mockResolvedValue({ goldPity: 90, purplePity: null });
+    expect(await getPityValues(DOMAIN)).toEqual({ goldPity: "90", purplePity: "" });
+    expect(db.gachaSettings.findFirst.mock.calls[0][0].where).toEqual({ shop: { domain: DOMAIN } });
+  });
+
+  it("is empty when the shop has no settings yet", async () => {
+    db.gachaSettings.findFirst.mockResolvedValue(null);
+    expect(await getPityValues(DOMAIN)).toEqual({ goldPity: "", purplePity: "" });
+  });
+});
+
+describe("parsePityForm", () => {
+  it("returns the typed values, the guarantees and any errors", () => {
+    expect(parsePityForm(form({ goldPity: " 90 ", purplePity: "x" }))).toEqual({
+      values: { goldPity: "90", purplePity: "x" },
+      pity: { gold: 90, purple: null },
+      errors: { purplePity: expect.stringMatching(/whole number/) },
+    });
+  });
+});
+
+describe("saveGachaSetup", () => {
+  it("saves the tiers and upserts the guarantees in one transaction", async () => {
+    db.shop.upsert.mockResolvedValue({ id: 7, domain: DOMAIN });
+    db.discountRule.updateMany.mockResolvedValue({ count: 1 });
+    db.gachaSettings.upsert.mockResolvedValue({});
+
+    await saveGachaSetup(DOMAIN, { 1: "GOLD", 2: null }, { gold: 90, purple: null });
+
+    expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.discountRule.updateMany).toHaveBeenCalledWith({
+      where: { shopId: 7, id: { in: [1] } },
+      data: { gachaTier: "GOLD" },
+    });
+    expect(db.discountRule.updateMany).toHaveBeenCalledWith({
+      where: { shopId: 7, id: { in: [2] } },
+      data: { gachaTier: null },
+    });
+    expect(db.gachaSettings.upsert).toHaveBeenCalledWith({
+      where: { shopId: 7 },
+      create: { shopId: 7, goldPity: 90, purplePity: null },
+      update: { goldPity: 90, purplePity: null },
     });
   });
 });

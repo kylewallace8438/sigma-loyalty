@@ -16,6 +16,7 @@ const CUSTOMERS_PAGE = `#graphql
         firstName
         lastName
         createdAt
+        state
         defaultEmailAddress { emailAddress }
       }
       pageInfo { hasNextPage endCursor }
@@ -30,7 +31,7 @@ export async function getCustomersCount(admin) {
 
 /**
  * One page of customers, oldest first. Returns { customers, nextCursor } where each customer is
- * { id, firstName, lastName, email, createdAt: Date } and nextCursor is null on the last page.
+ * { id, firstName, lastName, email, createdAt: Date, state } and nextCursor is null on the last page.
  */
 export async function getCustomersPage(admin, { first, after = null }) {
   const { customers } = await adminQuery(admin, CUSTOMERS_PAGE, { first, after });
@@ -41,6 +42,7 @@ export async function getCustomersPage(admin, { first, after = null }) {
       lastName: c.lastName,
       email: c.defaultEmailAddress?.emailAddress ?? null,
       createdAt: new Date(c.createdAt),
+      state: c.state,
     })),
     nextCursor: customers.pageInfo.hasNextPage ? customers.pageInfo.endCursor : null,
   };

@@ -59,6 +59,22 @@ api_version = "2026-07"
   uri = "/webhooks/app/order_fulfilled"
   topics = [ "orders/fulfilled" ]
 
+  # Customer topics also need protected customer data access.
+  # Handled by: app/routes/webhooks.app.customer_created.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/customer_created"
+  topics = [ "customers/create" ]
+
+  # Handled by: app/routes/webhooks.app.customer_updated.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/customer_updated"
+  topics = [ "customers/update" ]
+
+  # Handled by: app/routes/webhooks.app.customer_deleted.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/customer_deleted"
+  topics = [ "customers/delete" ]
+
   # Mandatory compliance webhooks (required for App Store distribution)
   # Handled by: app/routes/webhooks.customers.data_request.jsx
   [[webhooks.subscriptions]]

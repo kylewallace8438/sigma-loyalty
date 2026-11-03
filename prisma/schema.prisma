@@ -42,6 +42,9 @@ model Shop {
   customers       Customer[]
   redeemHistories RedeemHistory[]
   orders          Order[]
+  gachaSettings   GachaSettings?
+  storeSettings   StoreSettings?
+  pointHistories  PointHistory[]
 }
 
 enum DiscountType {
@@ -78,6 +81,17 @@ model DiscountRule {
   @@index([shopId])
 }
 
+// A shop's gacha guarantees ("pity"): the most rolls it can take to get a Gold item, and to get
+// a Purple-or-better item. null = no guarantee. See rollWithPity in app/services/gacha/tiers.js.
+model GachaSettings {
+  id         Int      @id @default(autoincrement())
+  shopId     Int      @unique
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  goldPity   Int?
+  purplePity Int?
+  updatedAt  DateTime @updatedAt
+}
+
 // A Shopify customer of a shop, with their loyalty point balance.
 model Customer {
   id                Int             @id @default(autoincrement())
@@ -87,14 +101,68 @@ model Customer {
   firstName         String?
   lastName          String?
   email             String?
-  points            Int             @default(0)
+  points            Int             @default(0) // spendable balance; kept equal to the sum of pointHistories
+  pointsEarned      Int             @default(0) // lifetime points earned (never lowered by spending); used by VIP tiers
+  state             CustomerState   @default(DISABLED) // ENABLED = has a customer account (member), else guest
+  excluded          Boolean         @default(false) // excluded by the merchant: earns and redeems nothing
   shopifyCreatedAt  DateTime? // when the customer was created in Shopify
+  shopifyUpdatedAt  DateTime? // payload updated_at; an older webhook never overwrites a newer one
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   redeemHistories   RedeemHistory[]
+  pointHistories    PointHistory[]
 
   @@unique([shopId, shopifyCustomerId])
   @@index([shopId, shopifyCreatedAt])
+}
+
+// Shopify's customer account state.
+enum CustomerState {
+  DISABLED
+  INVITED
+  ENABLED
+  DECLINED
+}
+
+enum PointHistoryType {
+  EARN // an earning rule (order, sign-up, birthday, ...)
+  REDEEM // points exchanged for a discount
+  ADJUST // added or removed by the merchant
+  REFUND // order reward taken back after a refund
+  RETURN_CODE // points of a redeemed code given back after a refund
+  EXPIRED // balance expired after inactivity
+}
+
+// The points ledger: one append-only row per change to a customer's balance.
+model PointHistory {
+  id         Int              @id @default(autoincrement())
+  shopId     Int
+  shop       Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerId Int
+  customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type       PointHistoryType
+  points     Int // signed: positive adds to the balance, negative takes away
+  reason     String           @db.VarChar(255)
+  createdAt  DateTime         @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([shopId, createdAt])
+}
+
+// Program settings, one row per shop (missing row = defaults, see app/services/settings/settings.server.js).
+model StoreSettings {
+  id                     Int     @id @default(autoincrement())
+  shopId                 Int     @unique
+  shop                   Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  programEnabled         Boolean @default(false) // master switch: when off, nothing is earned or redeemed
+  pointsName             String? @db.VarChar(50) // null = "Points"
+  includeTax             Boolean @default(false) // order amounts include tax (earning and VIP spend)
+  rewardFulfilled        Boolean @default(true) // award order points on fulfilment, not on creation
+  rewardGuests           Boolean @default(true) // customers without an account can earn
+  refundEnabled          Boolean @default(true) // take back order points after a refund
+  returnPointsOnRefund   Boolean @default(true) // give back points spent on a code used in a refunded order
+  pointExpirationEnabled Boolean @default(false)
+  pointExpirationMonths  Int? // balance expires after this many months without earning or redeeming
 }
 
 // One row per points redemption. The customer is referenced by their Shopify gid;
