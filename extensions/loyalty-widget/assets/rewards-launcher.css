@@ -102,6 +102,8 @@
 }
 
 .sigma-rewards__body {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
   padding: 20px;
   font-size: 14px;
   line-height: 1.5;
@@ -185,4 +187,146 @@
     transition: none;
     animation: none;
   }
+}
+
+.sigma-rewards__notice {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #ecfdf3;
+  color: #05603a;
+}
+
+.sigma-rewards__notice.is-error {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.sigma-rewards__subheading {
+  margin: 20px 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sigma-rewards__hint {
+  margin: 0 0 8px;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.sigma-rewards__rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sigma-rewards__rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.sigma-rewards__rule.is-done .sigma-rewards__rule-name {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.sigma-rewards__rule-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sigma-rewards__rule-name {
+  font-weight: 600;
+}
+
+.sigma-rewards__rule-points {
+  color: rgba(0, 0, 0, 0.65);
+  font-size: 13px;
+}
+
+.sigma-rewards__action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.sigma-rewards__action {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sigma-accent);
+  color: var(--sigma-accent-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sigma-rewards__action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sigma-rewards__action:focus-visible,
+.sigma-rewards__input:focus-visible {
+  outline: 2px solid var(--sigma-accent);
+  outline-offset: 2px;
+}
+
+.sigma-rewards__done {
+  flex-shrink: 0;
+  color: #05603a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sigma-rewards__copy-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.sigma-rewards__input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.sigma-rewards__birthday {
+  margin-top: 16px;
+}
+
+.sigma-rewards__code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.sigma-rewards__points-input {
+  flex: none;
+  width: 84px;
+}
+
+.sigma-rewards__tier {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--sigma-accent);
+}
+
+.sigma-rewards__perks {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+
+.sigma-rewards__rule.is-current .sigma-rewards__rule-name {
+  color: var(--sigma-accent);
 }

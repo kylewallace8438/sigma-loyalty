@@ -45,12 +45,26 @@ model Shop {
   gachaSettings   GachaSettings?
   storeSettings   StoreSettings?
   pointHistories  PointHistory[]
+  earningRules    EarningRule[]
+  tierProgram     TierProgram?
+  tiers           Tier[]
+  tierHistories   TierHistory[]
+  tierCredits     TierCredit[]
+  subscriptions   Subscription[]
+  shopFeatures    ShopFeature[]
 }
 
 enum DiscountType {
   FIXED_AMOUNT
   PERCENTAGE
   FREE_SHIPPING
+  FREE_PRODUCT // a fixed amount off one chosen product (as in the original app)
+}
+
+// How a customer pays for a reward: its points cost, or (fixed amount only) any multiple of it.
+enum RedeemSpendMode {
+  FIXED
+  INCREMENT
 }
 
 // Rarity tier of a rule in the gacha reward pool (see app/services/gacha/tiers.js for the odds).
@@ -60,8 +74,8 @@ enum GachaTier {
   GOLD
 }
 
-// A reward template: what a discount gives and what it costs in points. Stored only in the app;
-// points are exchanged for Shopify discounts manually.
+// A reward customers redeem points for: what the discount gives and what it costs. Redeeming
+// creates a one-customer Shopify discount code (see app/services/discounts/redeem.server.js).
 model DiscountRule {
   id                     Int          @id @default(autoincrement())
   shopId                 Int
@@ -71,12 +85,27 @@ model DiscountRule {
   discountType           DiscountType
   discountValue          Decimal?     @db.Decimal(10, 2) // amount (FIXED_AMOUNT) or percent 1-100 (PERCENTAGE)
   minimumSubtotal        Decimal?     @db.Decimal(10, 2)
-  usageLimit             Int?
+  usageLimit             Int? // most redemptions in total, across customers
+  perCustomerLimit       Int? // most redemptions per customer
   appliesOncePerCustomer Boolean      @default(true)
   active                 Boolean      @default(true) // off = retired without deleting
   gachaTier              GachaTier? // null = not in the gacha reward pool
+  // INCREMENT (FIXED_AMOUNT only): the customer spends any multiple of pointsCost, between minPoints
+  // and maxPoints, and gets discountValue for each pointsCost spent.
+  spendMode              RedeemSpendMode @default(FIXED)
+  minPoints              Int?
+  maxPoints              Int?
+  expiresInDays          Int? // the code expires this many days after it's created; null = never
+  collections            Json? // [{ id, title }]: FIXED_AMOUNT / PERCENTAGE only apply to these; empty = whole order
+  product                Json? // { id, title }: the product a FREE_PRODUCT reward discounts
+  maxShippingFee         Decimal?     @db.Decimal(10, 2) // FREE_SHIPPING: only for shipping rates up to this
+  combinesWithOrder      Boolean      @default(false) // the code combines with order discounts
+  combinesWithProduct    Boolean      @default(false)
+  combinesWithShipping   Boolean      @default(false)
   createdAt              DateTime     @default(now())
   updatedAt              DateTime     @updatedAt
+  redeemHistories        RedeemHistory[]
+  tierRewards            TierReward[]
 
   @@index([shopId])
 }
@@ -107,13 +136,30 @@ model Customer {
   excluded          Boolean         @default(false) // excluded by the merchant: earns and redeems nothing
   shopifyCreatedAt  DateTime? // when the customer was created in Shopify
   shopifyUpdatedAt  DateTime? // payload updated_at; an older webhook never overwrites a newer one
+  birthday          DateTime?       @db.Date // entered by the customer in the storefront widget
+  birthdayRewardAt  DateTime? // when the next birthday points are due (see app/services/earning/birthday.server.js)
+  referralCode      String?         @db.VarChar(20) // the code in this customer's referral link
+  referredById      Int? // the customer whose referral link this customer signed up through
+  referredBy        Customer?       @relation("Referral", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals         Customer[]      @relation("Referral")
+  pointsExpireAt    DateTime? // the balance expires at this time unless the customer earns or redeems first
+  tierId            Int? // VIP tier; null = not placed yet (or the tier was deleted)
+  tier              Tier?           @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  tierAchievedAt    DateTime?
+  tierExpiresAt     DateTime? // calendar-year programs: Dec 31, when the tier is re-evaluated for the new year
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   redeemHistories   RedeemHistory[]
   pointHistories    PointHistory[]
+  tierHistories     TierHistory[]
+  tierCredits       TierCredit[]
 
   @@unique([shopId, shopifyCustomerId])
+  @@unique([shopId, referralCode])
   @@index([shopId, shopifyCreatedAt])
+  @@index([birthdayRewardAt])
+  @@index([pointsExpireAt])
+  @@index([tierExpiresAt])
 }
 
 // Shopify's customer account state.
@@ -140,13 +186,59 @@ model PointHistory {
   shop       Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customerId Int
   customer   Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  type       PointHistoryType
-  points     Int // signed: positive adds to the balance, negative takes away
-  reason     String           @db.VarChar(255)
-  createdAt  DateTime         @default(now())
+  type           PointHistoryType
+  points         Int // signed: positive adds to the balance, negative takes away
+  reason         String           @db.VarChar(255)
+  earningType    EarningType? // the earning rule behind an EARN row
+  shopifyOrderId BigInt? // the order an order reward (or its refund) belongs to
+  // Makes an award happen at most once per customer, e.g. "order:123", "NEWSLETTER", "BIRTHDAY:2026".
+  // null = no limit (adjustments, redeems).
+  dedupeKey      String?          @db.VarChar(100)
+  createdAt      DateTime         @default(now())
 
+  @@unique([customerId, dedupeKey])
   @@index([customerId, createdAt])
   @@index([shopId, createdAt])
+  @@index([shopId, shopifyOrderId])
+}
+
+// The ways customers earn points (same set as the original app). See app/services/earning/types.js.
+enum EarningType {
+  PLACE_ORDER
+  CREATE_ACCOUNT
+  NEWSLETTER
+  BIRTHDAY
+  COMPLETE_PROFILE
+  REFERRER // the customer who shared their referral link
+  REFERRED_FRIEND // the friend who signed up through it
+  FOLLOW_INSTAGRAM
+  FOLLOW_X
+  SHARE_ON_X
+  RETWEET
+  LIKE_ON_FACEBOOK
+  SHARE_ON_FACEBOOK
+  JOIN_FACEBOOK_GROUP
+  FOLLOW_TIKTOK
+  FOLLOW_LINKEDIN
+  SHARE_ON_LINKEDIN
+  SUBSCRIBE_YOUTUBE
+  FOLLOW_PINTEREST
+  VIP_BONUS // extra order points from a VIP tier's multiplier (not counted toward tiers)
+}
+
+// A shop's settings for one earning rule. A missing row means the defaults: inactive, 10 points.
+model EarningRule {
+  id        Int         @id @default(autoincrement())
+  shopId    Int
+  shop      Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type      EarningType
+  name      String      @db.VarChar(100) // shown to customers in the widget and in their history
+  active    Boolean     @default(false)
+  points    Int         @default(10)
+  config    Json? // type-specific settings, see parseEarningRuleForm in app/services/earning/rules.server.js
+  updatedAt DateTime    @updatedAt
+
+  @@unique([shopId, type])
 }
 
 // Program settings, one row per shop (missing row = defaults, see app/services/settings/settings.server.js).
@@ -165,20 +257,30 @@ model StoreSettings {
   pointExpirationMonths  Int? // balance expires after this many months without earning or redeeming
 }
 
-// One row per points redemption. The customer is referenced by their Shopify gid;
-// shopifyDiscountId is the gid of the Shopify discount the points were exchanged for.
+// One row per points redemption: the discount code a customer got for their points. The customer
+// is referenced by their Shopify gid; shopifyDiscountId is the gid of the Shopify code discount.
 model RedeemHistory {
-  id                Int      @id @default(autoincrement())
+  id                Int           @id @default(autoincrement())
   shopId            Int
-  shop              Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop              Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   shopifyCustomerId String
-  customer          Customer @relation(fields: [shopId, shopifyCustomerId], references: [shopId, shopifyCustomerId], onDelete: Cascade)
+  customer          Customer      @relation(fields: [shopId, shopifyCustomerId], references: [shopId, shopifyCustomerId], onDelete: Cascade)
   points            Int
   shopifyDiscountId String // gid://shopify/DiscountCodeNode/123
-  createdAt         DateTime @default(now())
+  discountRuleId    Int?
+  discountRule      DiscountRule? @relation(fields: [discountRuleId], references: [id], onDelete: SetNull)
+  code              String?       @db.VarChar(32) // upper case; null for rows from before codes were issued by the app
+  title             String?       @db.VarChar(255) // the reward's title when redeemed
+  discountValue     Decimal?      @db.Decimal(10, 2) // amount or percent the code gives (INCREMENT: what was bought)
+  expiresAt         DateTime?
+  usedAt            DateTime? // first order that used the code (orders/create)
+  usedOrderId       BigInt?
+  createdAt         DateTime      @default(now())
 
   @@index([shopId, shopifyCustomerId])
   @@index([shopId, createdAt])
+  @@index([shopId, code])
+  @@index([discountRuleId])
 }
 
 // A customer's Shopify order, saved from the orders/create and orders/fulfilled webhooks (one row per order).
@@ -210,4 +312,178 @@ model Order {
 
   @@unique([shopId, shopifyOrderId])
   @@index([shopifyCreatedAt]) // retention cleanup, across all shops
+}
+
+// ---------------------------------------------------------------------------------------------
+// VIP tiers (see app/services/tiers/). Same model as the original app: one program per shop, tiers
+// ordered by threshold, customers only move up, except after a refund, a deleted tier or the
+// calendar-year reset.
+
+enum TierEntryMethod {
+  POINTS_EARNED // points earned (not spent) in the period
+  MONEY_SPENT // order amounts in the period
+}
+
+enum TierMilestone {
+  LIFETIME
+  CALENDAR_YEAR // counted from Jan 1; tiers are re-evaluated on Dec 31
+}
+
+// A shop's tier program settings. A missing row means the defaults.
+model TierProgram {
+  id          Int             @id @default(autoincrement())
+  shopId      Int             @unique
+  shop        Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  enabled     Boolean         @default(false)
+  entryMethod TierEntryMethod @default(POINTS_EARNED)
+  milestone   TierMilestone   @default(LIFETIME)
+  startDate   DateTime        @default(now()) // the program only runs from this date
+  updatedAt   DateTime        @updatedAt
+}
+
+model Tier {
+  id         Int           @id @default(autoincrement())
+  shopId     Int
+  shop       Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  title      String        @db.VarChar(100)
+  icon       String?       @db.VarChar(30) // a built-in icon name (see app/services/tiers/icons.js)
+  threshold  Decimal       @default(0) @db.Decimal(12, 2) // points earned or amount spent to reach it
+  multiplier Decimal?      @db.Decimal(6, 2) // > 1: order points are multiplied by this; null = no bonus
+  perks      Json? // ["Free gift wrapping", ...]: text-only benefits shown to customers
+  tagEnabled Boolean       @default(false) // tag the customer "VIP: <title>" in Shopify
+  isDefault  Boolean       @default(false) // the entry tier (threshold 0); can't be deleted
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  rewards    TierReward[]
+  customers  Customer[]
+  histories  TierHistory[]
+
+  @@index([shopId])
+}
+
+// Entry rewards: a code of each linked discount rule is given when a customer reaches the tier.
+model TierReward {
+  tierId         Int
+  tier           Tier         @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  discountRuleId Int
+  discountRule   DiscountRule @relation(fields: [discountRuleId], references: [id], onDelete: Cascade)
+
+  @@id([tierId, discountRuleId])
+}
+
+// Append-only log of the tiers a customer was placed in.
+model TierHistory {
+  id         Int      @id @default(autoincrement())
+  shopId     Int
+  shop       Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tierId     Int?
+  tier       Tier?    @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  tierTitle  String   @db.VarChar(100)
+  createdAt  DateTime @default(now())
+
+  @@index([customerId, tierId, createdAt])
+  @@index([shopId])
+}
+
+enum TierCreditKind {
+  SPEND // an order's amount (negative for its refunds/cancellation), for money-spent programs
+  MANUAL // added by the merchant's "Change tier" so the customer reaches the chosen tier
+}
+
+// What counts toward a tier besides earned points: order amounts and manual top-ups, one row per
+// source (sourceKey, e.g. "order:123", "refund:456"), so webhook re-deliveries don't count twice.
+model TierCredit {
+  id         Int            @id @default(autoincrement())
+  shopId     Int
+  shop       Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customerId Int
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  kind       TierCreditKind
+  amount     Decimal        @db.Decimal(12, 2)
+  sourceKey  String         @db.VarChar(100)
+  createdAt  DateTime       @default(now())
+
+  @@unique([customerId, sourceKey])
+  @@index([customerId, createdAt])
+  @@index([shopId])
+}
+
+// ---------------------------------------------------------------------------------------------
+// App plans (see app/services/billing/). Same structure as the original app: plans with code/value
+// features, per-shop overrides and usage counters. Only the Free plan exists for now (seeded by the
+// migration and given to every shop at install); no Shopify charge is created.
+
+model Plan {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique @db.VarChar(50)
+  description   String?        @db.VarChar(255)
+  price         Decimal        @default(0) @db.Decimal(8, 2) // 0 = free
+  interval      String?        @db.VarChar(20) // EVERY_30_DAYS | ANNUAL for paid plans (appSubscriptionCreate)
+  trialDays     Int            @default(0)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  features      PlanFeature[]
+  subscriptions Subscription[]
+}
+
+// A feature of a plan. value: Y / YES / TRUE / UNLIMITED = on, N or 0 = off, a number = a limit.
+model PlanFeature {
+  id     Int    @id @default(autoincrement())
+  planId Int
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  code   String @db.VarChar(64)
+  value  String @db.VarChar(32)
+
+  @@unique([planId, code])
+}
+
+// A per-shop override of a plan feature, optionally limited to a time window.
+model ShopFeature {
+  id       Int       @id @default(autoincrement())
+  shopId   Int
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  code     String    @db.VarChar(64)
+  value    String    @db.VarChar(32)
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  @@index([shopId, code])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+// A shop's plan subscriptions, append-only: the current one is the newest ACTIVE row.
+model Subscription {
+  id                    Int                 @id @default(autoincrement())
+  shopId                Int
+  shop                  Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  planId                Int
+  plan                  Plan                @relation(fields: [planId], references: [id])
+  status                SubscriptionStatus  @default(ACTIVE)
+  startsAt              DateTime            @default(now())
+  endsAt                DateTime?
+  trialEndsAt           DateTime?
+  shopifySubscriptionId String?             @db.VarChar(100) // gid of the AppSubscription (paid plans)
+  createdAt             DateTime            @default(now())
+  usages                SubscriptionUsage[]
+
+  @@index([shopId, status])
+}
+
+// How much of a limited feature a subscription used in the current window (e.g. rewarded orders in
+// the last 30 days). The window starts at the first use and restarts once validUntil has passed.
+model SubscriptionUsage {
+  id             Int          @id @default(autoincrement())
+  subscriptionId Int
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  code           String       @db.VarChar(64)
+  used           Int          @default(0)
+  validUntil     DateTime?
+
+  @@unique([subscriptionId, code])
 }

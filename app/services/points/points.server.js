@@ -16,16 +16,51 @@ export class InsufficientPointsError extends Error {
  * Changes a customer's balance by `points` (signed) and logs it in the ledger. Must run inside a
  * transaction: pass the transaction client as `tx`. `earned` is added to the lifetime pointsEarned
  * (default: the points when positive, so spending never lowers it). A deduction larger than the
- * balance throws InsufficientPointsError. Returns the ledger row.
+ * balance throws InsufficientPointsError.
+ * Optional: `earningType` and `shopifyOrderId` are stored on the row; `dedupeKey` makes a second row
+ * with the same key for this customer fail with Prisma's P2002 (rolling back the transaction);
+ * `expiresAt` sets Customer.pointsExpireAt (a Date, or null to clear it; undefined leaves it).
+ * Returns the ledger row.
  */
-export async function applyPoints(tx, { shopId, customerId, type, points, reason, earned = Math.max(points, 0) }) {
+export async function applyPoints(
+  tx,
+  {
+    shopId,
+    customerId,
+    type,
+    points,
+    reason,
+    earned = Math.max(points, 0),
+    earningType = null,
+    shopifyOrderId = null,
+    dedupeKey = null,
+    expiresAt,
+  },
+) {
   // Conditional update, so two deductions running at once can't take the balance below zero.
   const { count } = await tx.customer.updateMany({
     where: { id: customerId, ...(points < 0 && { points: { gte: -points } }) },
-    data: { points: { increment: points }, pointsEarned: { increment: earned } },
+    data: {
+      points: { increment: points },
+      pointsEarned: { increment: earned },
+      ...(expiresAt !== undefined && { pointsExpireAt: expiresAt }),
+    },
   });
   if (!count) throw new InsufficientPointsError();
-  return tx.pointHistory.create({ data: { shopId, customerId, type, points, reason } });
+  return tx.pointHistory.create({
+    data: { shopId, customerId, type, points, reason: reason.slice(0, 255), earningType, shopifyOrderId, dedupeKey },
+  });
+}
+
+/**
+ * When a balance touched now should expire, per the shop's settings: a Date, or undefined when
+ * expiration is off (the stored date is left alone).
+ */
+export function expiryFrom(settings, now = new Date()) {
+  if (!settings.pointExpirationEnabled || !settings.pointExpirationMonths) return undefined;
+  const date = new Date(now);
+  date.setMonth(date.getMonth() + settings.pointExpirationMonths);
+  return date;
 }
 
 /** Reads the "Adjust points" form: { points (signed whole number), reason }. Returns { data, values, errors }. */
@@ -68,16 +103,4 @@ export async function listPointHistory(customerId, { skip = 0, take = 50 } = {})
     db.pointHistory.count({ where: { customerId } }),
   ]);
   return { rows, total };
-}
-
-/**
- * The storefront widget's view of a logged-in customer, by numeric Shopify id. A customer the app
- * hasn't synced yet has 0 points. Returns { points, pointsEarned, excluded }.
- */
-export async function getStorefrontBalance(shopDomain, shopifyNumericId) {
-  const customer = await db.customer.findFirst({
-    where: { shop: { domain: shopDomain }, shopifyCustomerId: `gid://shopify/Customer/${shopifyNumericId}` },
-    select: { points: true, pointsEarned: true, excluded: true },
-  });
-  return customer ?? { points: 0, pointsEarned: 0, excluded: false };
 }

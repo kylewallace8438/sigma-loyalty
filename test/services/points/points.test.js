@@ -27,7 +27,7 @@ describe("applyPoints", () => {
       data: { points: { increment: 25 }, pointsEarned: { increment: 25 } },
     });
     expect(db.pointHistory.create).toHaveBeenCalledWith({
-      data: { shopId: 7, customerId: 3, type: "EARN", points: 25, reason: "Complete an order" },
+      data: { shopId: 7, customerId: 3, type: "EARN", points: 25, reason: "Complete an order", earningType: null, shopifyOrderId: null, dedupeKey: null },
     });
   });
 
@@ -84,7 +84,7 @@ describe("adjustPoints", () => {
 
     expect(await adjustPoints(customer, { points: 10, reason: "Gift" })).toEqual({});
     expect(db.pointHistory.create).toHaveBeenCalledWith({
-      data: { shopId: 7, customerId: 3, type: "ADJUST", points: 10, reason: "Gift" },
+      data: { shopId: 7, customerId: 3, type: "ADJUST", points: 10, reason: "Gift", earningType: null, shopifyOrderId: null, dedupeKey: null },
     });
   });
 

@@ -46,22 +46,23 @@ Rules of thumb for this codebase:
    1.6 ✅ Shop record + post-install bootstrap
    1.7 🔲 Lint/test/CI pipeline
 2  Data model
-   2.1 🟡 Loyalty schema (✅ Shop, DiscountRule, Order, StoreSettings, Customer state/exclusion, PointHistory ledger · 🔲 Redemption codes, VIP tiers, plans)
+   2.1 ✅ Loyalty schema (Shop, DiscountRule, Order, StoreSettings, Customer state/exclusion, PointHistory ledger, EarningRule, redemption codes (RedeemHistory), VIP tiers, plans)
    2.2 🔲 Webhook idempotency & event log
 3  Earning points
-   3.1 🟡 Award pending points on order (orders/create or orders/paid)
-   3.2 🟡 Confirm points on fulfilment (orders/fulfilled)
-   3.3 🔲 Reverse points on refund / cancellation
-   3.4 🔲 Bonus rules (sign-up, birthday, manual campaigns)
-   3.5 🔲 Points expiry job
+   3.0 ✅ Earning rules page (/app/earning): every rule type of the original app, off by default
+   3.1 ✅ Award order points (fixed or per amount, product/collection filters) on orders/create or orders/fulfilled
+   3.2 ✅ "Only reward on fulfilment" setting decides which of the two awards
+   3.3 ✅ Take back order points on refunds/create and orders/cancelled
+   3.4 ✅ Other rules: sign-up, newsletter, birthday, complete profile, referral (both sides), 12 social actions
+   3.5 ✅ Points expiry job (hourly, with birthday rewards)
 4  Redeeming points
-   4.1 ✅ Rewards catalogue = discount rules (app-only templates)
-   4.1b ❌ Discount codes screen (removed: points are exchanged for Shopify discounts manually)
-   4.2 🔲 Redeem → generate customer-specific discount code
-   4.3 🔲 Track discount usage & expire unused codes
+   4.1 ✅ Rewards catalogue = discount rules: amount / percentage / free shipping / free product, fixed or
+          customer-chosen points, collections, expiry, combinations, total and per-customer limits
+   4.2 ✅ Redeem → one-customer, single-use Shopify code (storefront widget, /proxy/redeem)
+   4.3 ✅ Codes marked used on orders/create; points of a code given back on refund/cancel
 5  Customer-facing surfaces
-   5.1 🔲 App proxy API (storefront → app)
-   5.2 🔲 Theme app extension (points widget / app block)
+   5.1 ✅ App proxy API: /points (widget data), /earn (actions), /referral (referral link tokens)
+   5.2 ✅ Theme app extension: rewards launcher with balance, ways to earn, referral link, birthday form
    5.3 🔲 Customer account UI extension (balance + redeem on Profile)
    5.4 🔲 Sync balance to a customer metafield (optional)
 6  Privacy & compliance
@@ -73,8 +74,9 @@ Rules of thumb for this codebase:
    7.1 ✅ Program settings page (/app/settings)
    7.2 ✅ Members list (All/Members/Guests/Excluded) & member detail (ledger, adjust points, exclude)
    7.3 🔲 Dashboard metrics
+   7.4 ✅ VIP tiers (/app/vip-tiers): program settings, tiers, entry rewards, multiplier, perks, tags; "Change tier" on the customer page
 8  Monetisation
-   8.1 🔲 App pricing plans (managed pricing)
+   8.1 🟡 Plans: Free plan only (every feature, no limits), seeded and given at install; feature checks in place (/app/plan)
 9  Operations & launch
    9.1 🟡 Background jobs / queue for heavy webhook work (webhook queue ✅)
    9.2 🔲 Backups, monitoring, alerting
@@ -206,6 +208,23 @@ model Redemption {
 
 ## 3. Earning points
 
+> **Implemented (phase 2 of the D:\loyalty port).** The sections below were the original plan; the code now lives in
+> `app/services/earning/`:
+> - `types.js`: the rule list (shared with the admin pages).
+> - `rules.server.js`: settings per rule. A missing row means defaults (off, 10 points).
+> - `award.server.js`: `earnPoints`, the single award path. It checks program on, not excluded, and a once-only `dedupeKey` (unique per customer in `PointHistory`).
+> - `orders.server.js`: order points, the referrer reward, refund/cancel.
+> - `account.server.js`: sign-up.
+> - `birthday.server.js` and `referral.server.js`.
+> - `storefront.server.js`: widget data and actions.
+> - `jobs.server.js`: hourly birthday and expiry runs.
+>
+> Differences from the original app:
+> - Cancellations also take points back (the original skipped them by mistake).
+> - The "Leave a review" rule isn't ported: it depends on Judge.me and other review-app integrations.
+> - Referral rewards can be points or a discount code (since phase 3).
+> - Points-name translations and earning emails aren't ported.
+
 ### 3.1 🟡 Award pending points on order — **M**
 - **Scaffold**: `app/routes/webhooks.app.order_created.jsx` (`orders/create`) logs the order.
 - **How**:
@@ -235,6 +254,18 @@ model Redemption {
 ---
 
 ## 4. Redeeming points
+
+> **Implemented (phase 3 of the D:\loyalty port).** The sections below were the original plan. The code:
+> - `app/services/discounts/rules.server.js`: the rule form.
+> - `app/services/discounts/redeem.server.js`:
+>   - `redeemReward`: checks the redemption, creates the code with `discountCodeBasicCreate` or
+>     `discountCodeFreeShippingCreate`, then deducts the points and records the code in one transaction,
+>     deleting the code with `discountCodeDelete` if that transaction fails.
+>   - `issueRewardCode`: free codes for referral rewards, and VIP tier rewards next.
+>   - `markCodesUsed` and `returnCodePoints`.
+>
+> Codes are 8 random characters with no prefix, as in the original app. Referral rules can now give a
+> code instead of points. The original app's POS reward types aren't ported.
 
 ### 4.1 ✅ Rewards catalogue (discount rules) — **S**
 - **Pages**: `/app/discount-rules` (list with search by title, status and type filters) and `/app/discount-rules/new` or `/:id`.
@@ -354,10 +385,31 @@ Remove the template demo once 7.3 exists: `app.additional.jsx`, the product-crea
 
 ---
 
+## 7b. VIP tiers (phase 4 of the D:\loyalty port)
+
+- **Program** (`TierProgram`):
+  - Customers qualify by points earned or by amount spent.
+  - Counted over their lifetime or a calendar year.
+  - Has a start date.
+  - Changing what customers qualify by deletes every tier except the entry tier and resets everyone, as in the original app.
+- **Tiers** (`Tier`):
+  - Each has a threshold, an icon, an order-points multiplier (paid as a separate `VIP_BONUS` row that doesn't count toward tiers), text perks and an optional `VIP: <title>` customer tag.
+  - Entry rewards are discount rules (`TierReward`) whose codes are given the first time a customer reaches the tier (or the first time that year).
+- **Placement** (`app/services/tiers/sync.server.js`):
+  - Runs after every points award, positive adjustment and order spend.
+  - Customers move up through each tier they reach.
+  - They only move down after a refund or cancellation, a deleted tier, or the Dec 31 reset (the hourly job).
+  - The value is computed from the ledger and `TierCredit` rows of the period, so a new year needs no recalculation.
+- **Change tier** (customer page) only moves customers up. It adds a `MANUAL` credit for the missing amount.
+
 ## 8. Monetisation
 
-### 8.1 🔲 App pricing — **M**
-- Prefer **managed pricing** (plans configured in the Partner Dashboard; Shopify hosts the plan picker). Gate features with the active plan, e.g. member limits on a free tier.
+### 8.1 🟡 App pricing — **M**
+- **Done (phase 5 of the D:\loyalty port):** the original app's structure is in place.
+  - Tables: `Plan`, `PlanFeature` (code/value), `ShopFeature` (per-shop overrides with a time window), `Subscription` and `SubscriptionUsage` (30-day windows).
+  - The migration seeds a single **Free** plan with every feature on and no order limit. Every shop gets it at install (`afterAuth` → `ensureSubscription`).
+  - Feature checks (`canUse`, `remaining`, `recordUse` in `app/services/billing/plan.server.js`) gate: earning rules, the monthly order limit, free product rewards, VIP tiers, manual tier changes and point expiration. Codes are listed in `app/services/billing/features.js`.
+- **Remaining for paid plans:** add `Plan` rows with their feature values, and charge with GraphQL `appSubscriptionCreate`, checking the charge status before activating (the original app activated declined charges). Alternatively, use managed pricing (plans configured in the Partner Dashboard, where Shopify hosts the plan picker) and map those plans to `Plan` rows.
 
 ---
 
@@ -382,7 +434,7 @@ Remove the template demo once 7.3 exists: `app.additional.jsx`, the product-crea
 | `read_orders` | 3.1–3.3, 4.3 | ✅ present |
 | `read_customers` | 2.x customer sync, 3.4, 7.2 | ✅ added (needs `shopify app deploy` + approval) |
 | `write_discounts`, `read_discounts` | 4.1, 4.2 | ✅ added (needs `shopify app deploy` + merchant approval) |
-| `write_customers` | 5.4 (metafield sync) | 🔲 add if used |
+| `write_customers` | 3.4 newsletter subscription, VIP tier tags, 5.4 | ✅ added (needs `shopify app deploy` + approval) |
 | `write_products`, `write_metaobjects`, `write_metaobject_definitions` | template demo only | remove with the demo |
 
 Update `scopes` in `shopify.app.toml` **and** `SCOPES` in `.env`, then `shopify app deploy`. Merchants are asked to approve the new scopes the next time they open the app.

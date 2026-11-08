@@ -8,7 +8,7 @@ name = "Sigma Loyalty"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,write_discounts,read_discounts,read_customers,write_app_proxy"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,write_discounts,read_discounts,read_customers,write_customers,write_app_proxy"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
@@ -58,6 +58,16 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/order_fulfilled"
   topics = [ "orders/fulfilled" ]
+
+  # Handled by: app/routes/webhooks.app.order_cancelled.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/order_cancelled"
+  topics = [ "orders/cancelled" ]
+
+  # Handled by: app/routes/webhooks.app.refund_created.jsx
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/refund_created"
+  topics = [ "refunds/create" ]
 
   # Customer topics also need protected customer data access.
   # Handled by: app/routes/webhooks.app.customer_created.jsx

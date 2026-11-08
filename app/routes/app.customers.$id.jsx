@@ -6,6 +6,8 @@ import { getCustomer, setExcluded } from "../services/customers/customers.server
 import { adjustPoints, listPointHistory, parseAdjustForm } from "../services/points/points.server";
 import { getSettings, pointsLabel } from "../services/settings/settings.server";
 import { StatusBadge, customerStatus } from "../components/CustomerStatus";
+import { changeCustomerTier, syncTierSafely, tierStatus } from "../services/tiers/sync.server";
+import { describeThreshold } from "../services/tiers/icons";
 
 // Formatted on the server in UTC so server and client render the same text.
 const DATE = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
@@ -23,6 +25,16 @@ const HISTORY_TYPES = {
   EXPIRED: "Expired",
 };
 
+// A redeemed code: used (by an order), expired, or still available.
+function codeStatus(redemption, now = new Date()) {
+  if (redemption.usedAt) return { label: "Used", tone: "success" };
+  if (redemption.expiresAt && redemption.expiresAt <= now) {
+    return { label: `Expired ${DATE.format(redemption.expiresAt)}`, tone: "neutral" };
+  }
+  if (redemption.expiresAt) return { label: `Expires ${DATE.format(redemption.expiresAt)}`, tone: "info" };
+  return { label: "Available", tone: "info" };
+}
+
 async function loadCustomer(request, params) {
   const { session } = await authenticate.admin(request);
   const id = Number(params.id);
@@ -35,14 +47,25 @@ async function loadCustomer(request, params) {
 export const loader = async ({ request, params }) => {
   const { session, customer } = await loadCustomer(request, params);
   const historyPage = Math.max(1, Number(new URL(request.url).searchParams.get("history")) || 1);
-  const [{ rows, total }, settings] = await Promise.all([
+  const [{ rows, total }, settings, tiers] = await Promise.all([
     listPointHistory(customer.id, { skip: (historyPage - 1) * HISTORY_PER_PAGE, take: HISTORY_PER_PAGE }),
     getSettings(session.shop),
+    tierStatus(customer),
   ]);
+  const pointsName = pointsLabel(settings);
 
   const redemptions = customer.redeemHistories;
   return {
-    pointsName: pointsLabel(settings),
+    pointsName,
+    tier: tiers && {
+      current: tiers.current?.title ?? null,
+      value: describeThreshold(tiers.value, tiers.program.entryMethod, pointsName),
+      next: tiers.next && { title: tiers.next.title, needed: describeThreshold(tiers.needed, tiers.program.entryMethod, pointsName) },
+      // "Change tier" only moves customers up, as in the original app.
+      above: tiers.tiers
+        .filter((t) => !tiers.current || Number(t.threshold) > Number(tiers.current.threshold))
+        .map((t) => ({ id: String(t.id), title: t.title })),
+    },
     name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unnamed customer",
     email: customer.email,
     status: customerStatus(customer),
@@ -65,6 +88,9 @@ export const loader = async ({ request, params }) => {
       date: `${DATE_TIME.format(r.createdAt)} UTC`,
       points: r.points,
       shopifyDiscountId: numericId(r.shopifyDiscountId),
+      code: r.code,
+      title: r.title,
+      status: codeStatus(r),
     })),
   };
 };
@@ -83,6 +109,13 @@ export const action = async ({ request, params }) => {
     if (Object.keys(errors).length) return { intent, values, errors };
     const result = await adjustPoints(customer, data);
     if (result.errors) return { intent, values, errors: result.errors };
+    // Added points count toward VIP tiers.
+    if (data.points > 0) await syncTierSafely(customer.shopId, customer.id);
+    return { intent, done: true };
+  }
+  if (intent === "tier") {
+    const result = await changeCustomerTier(customer, Number(formData.get("tierId")));
+    if (result.error) return { intent, error: result.error };
     return { intent, done: true };
   }
   throw new Response("Bad request", { status: 400 });
@@ -95,6 +128,8 @@ export default function CustomerDetail() {
   const shopify = useAppBridge();
   const adjust = useFetcher();
   const exclusion = useFetcher();
+  const tierChange = useFetcher();
+  const tierFormRef = useRef(null);
   const adjustFormRef = useRef(null);
   const modalRef = useRef(null);
 
@@ -111,6 +146,10 @@ export default function CustomerDetail() {
       shopify.toast.show(exclusion.data.intent === "exclude" ? "Customer excluded" : "Customer included");
     }
   }, [exclusion.state, exclusion.data, shopify]);
+
+  useEffect(() => {
+    if (tierChange.state === "idle" && tierChange.data?.done) shopify.toast.show("Tier changed");
+  }, [tierChange.state, tierChange.data, shopify]);
 
   const adjustErrors = adjust.data?.errors ?? {};
   const submitAdjust = () => adjust.submit(adjustFormRef.current, { method: "post" });
@@ -222,7 +261,8 @@ export default function CustomerDetail() {
           <s-table>
             <s-table-header-row>
               <s-table-header listSlot="primary">Discount</s-table-header>
-              <s-table-header listSlot="inline" format="numeric">
+              <s-table-header listSlot="inline">Status</s-table-header>
+              <s-table-header listSlot="labeled" format="numeric">
                 {c.pointsName} used
               </s-table-header>
               <s-table-header listSlot="labeled">Date</s-table-header>
@@ -231,9 +271,15 @@ export default function CustomerDetail() {
               {c.redemptions.map((r) => (
                 <s-table-row key={r.id}>
                   <s-table-cell>
-                    <s-link href={`shopify://admin/discounts/${r.shopifyDiscountId}`} target="_top">
-                      Discount {r.shopifyDiscountId}
-                    </s-link>
+                    <s-stack gap="small-500">
+                      <s-link href={`shopify://admin/discounts/${r.shopifyDiscountId}`} target="_top">
+                        {r.code ?? `Discount ${r.shopifyDiscountId}`}
+                      </s-link>
+                      {r.title && <s-text color="subdued">{r.title}</s-text>}
+                    </s-stack>
+                  </s-table-cell>
+                  <s-table-cell>
+                    <s-badge tone={r.status.tone}>{r.status.label}</s-badge>
                   </s-table-cell>
                   <s-table-cell>{r.points.toLocaleString()}</s-table-cell>
                   <s-table-cell>{r.date}</s-table-cell>
@@ -243,6 +289,35 @@ export default function CustomerDetail() {
           </s-table>
         )}
       </s-section>
+
+      {c.tier && (
+        <s-section slot="aside" heading="VIP tier">
+          <s-stack gap="base">
+            <s-text type="strong">{c.tier.current ?? "Not placed yet"}</s-text>
+            <s-text color="subdued">
+              {c.tier.value} this period
+              {c.tier.next ? `, ${c.tier.next.needed} more for ${c.tier.next.title}` : ""}
+            </s-text>
+            {c.tier.above.length > 0 && (
+              <tierChange.Form method="post" ref={tierFormRef}>
+                <input type="hidden" name="intent" value="tier" />
+                <s-stack gap="small-200">
+                  <s-select label="Move up to" name="tierId" error={tierChange.data?.error}>
+                    {c.tier.above.map((t) => (
+                      <s-option key={t.id} value={t.id}>
+                        {t.title}
+                      </s-option>
+                    ))}
+                  </s-select>
+                  <s-button type="submit" loading={tierChange.state !== "idle" || undefined}>
+                    Change tier
+                  </s-button>
+                </s-stack>
+              </tierChange.Form>
+            )}
+          </s-stack>
+        </s-section>
+      )}
 
       <s-section slot="aside" heading="Contact information">
         {c.email ? (

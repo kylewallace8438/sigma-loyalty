@@ -4,10 +4,12 @@ import { ServerRouter } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
 import { addDocumentResponseHeaders } from "./shopify.server";
 import logger from "./logger.server";
+import { schedulePointJobs } from "./services/earning/jobs.server";
 import { scheduleOrderCleanup } from "./services/orders/cleanup.server";
 import { startWebhookWorker } from "./services/webhooks/queue.server";
 
 scheduleOrderCleanup();
+schedulePointJobs();
 startWebhookWorker();
 
 export const streamTimeout = 5000;

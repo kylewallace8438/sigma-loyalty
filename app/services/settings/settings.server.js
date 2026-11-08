@@ -79,5 +79,10 @@ export function parseSettingsForm(formData) {
 export async function saveSettings(shopDomain, data) {
   const shop = await ensureShop(shopDomain);
   await db.storeSettings.upsert({ where: { shopId: shop.id }, create: { shopId: shop.id, ...data }, update: data });
+  // As in the original app, turning expiration off cancels every pending expiry. Turning it back on
+  // starts a customer's period at their next earn or redeem.
+  if (!data.pointExpirationEnabled) {
+    await db.customer.updateMany({ where: { shopId: shop.id, pointsExpireAt: { not: null } }, data: { pointsExpireAt: null } });
+  }
   logger.info({ shop: shopDomain, programEnabled: data.programEnabled }, "Store settings saved");
 }

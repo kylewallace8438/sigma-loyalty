@@ -8,9 +8,55 @@
   class="sigma-rewards"
   data-sigma-rewards
   data-logged-in="{{ logged_in }}"
-  data-endpoint="/apps/sigma-loyalty/points"
+  data-proxy="/apps/sigma-loyalty"
+  data-currency="{{ shop.currency }}"
+  data-account-url="{{ routes.account_url }}"
   style="--sigma-accent: {{ block.settings.accent_color }}; --sigma-accent-text: {{ block.settings.accent_text_color }};"
 >
+  <script type="application/json" data-sigma-rewards-i18n>
+    {
+      "pointsUnit": {{ 'rewards.points_unit' | t | json }},
+      "waysToEarn": {{ 'rewards.ways_to_earn' | t | json }},
+      "perOrder": {{ 'rewards.per_order' | t | json }},
+      "perAmount": {{ 'rewards.per_amount' | t | json }},
+      "everyBirthday": {{ 'rewards.every_birthday' | t | json }},
+      "done": {{ 'rewards.done' | t | json }},
+      "claim": {{ 'rewards.claim' | t | json }},
+      "editProfile": {{ 'rewards.edit_profile' | t | json }},
+      "birthdayLabel": {{ 'rewards.birthday_label' | t | json }},
+      "birthdaySave": {{ 'rewards.birthday_save' | t | json }},
+      "birthdaySaved": {{ 'rewards.birthday_saved' | t | json }},
+      "referralHeading": {{ 'rewards.referral_heading' | t | json }},
+      "referralBody": {{ 'rewards.referral_body' | t | json }},
+      "referralBodyShort": {{ 'rewards.referral_body_short' | t | json }},
+      "copy": {{ 'rewards.copy' | t | json }},
+      "copied": {{ 'rewards.copied' | t | json }},
+      "earned": {{ 'rewards.earned' | t | json }},
+      "actionError": {{ 'rewards.action_error' | t | json }},
+      "redeemHeading": {{ 'rewards.redeem_heading' | t | json }},
+      "redeem": {{ 'rewards.redeem' | t | json }},
+      "notEnough": {{ 'rewards.not_enough' | t | json }},
+      "perPoints": {{ 'rewards.per_points' | t | json }},
+      "minimumOrder": {{ 'rewards.minimum_order' | t | json }},
+      "pointsToSpend": {{ 'rewards.points_to_spend' | t | json }},
+      "codeReady": {{ 'rewards.code_ready' | t | json }},
+      "yourCodes": {{ 'rewards.your_codes' | t | json }},
+      "expires": {{ 'rewards.expires' | t | json }},
+      "useNow": {{ 'rewards.use_now' | t | json }},
+      "vipHeading": {{ 'rewards.vip_heading' | t | json }},
+      "vipCurrent": {{ 'rewards.vip_current' | t | json }},
+      "vipNext": {{ 'rewards.vip_next' | t | json }},
+      "vipTop": {{ 'rewards.vip_top' | t | json }},
+      "vipBonus": {{ 'rewards.vip_bonus' | t | json }},
+      "vipEntry": {{ 'rewards.vip_entry' | t | json }},
+      "signInToEarn": {{ 'rewards.sign_in_to_earn' | t | json }}
+    }
+  </script>
+
+  {%- comment -%} Draws the panel sections; the block schema loads rewards-launcher.js. {%- endcomment -%}
+  <script src="{{ 'rewards-redeem.js' | asset_url }}" defer></script>
+  <script src="{{ 'rewards-earn.js' | asset_url }}" defer></script>
+
   <dialog
     class="sigma-rewards__panel"
     id="sigma-rewards-panel"
@@ -43,7 +89,7 @@
         <div class="sigma-rewards__balance" aria-live="polite">
           <span class="sigma-rewards__label">{{ 'rewards.balance_label' | t }}</span>
           <span class="sigma-rewards__points" data-sigma-rewards-points>&ndash;</span>
-          <span class="sigma-rewards__unit">{{ 'rewards.points_unit' | t }}</span>
+          <span class="sigma-rewards__unit" data-sigma-rewards-unit>{{ 'rewards.points_unit' | t }}</span>
         </div>
         <p class="sigma-rewards__message" data-sigma-rewards-error hidden>
           {{ 'rewards.load_error' | t }}
@@ -51,6 +97,10 @@
         <p class="sigma-rewards__message" data-sigma-rewards-excluded hidden>
           {{ 'rewards.excluded' | t }}
         </p>
+        <p class="sigma-rewards__notice" role="status" data-sigma-rewards-notice hidden></p>
+        <div class="sigma-rewards__codes" data-sigma-rewards-codes hidden></div>
+        <div class="sigma-rewards__referral" data-sigma-rewards-referral hidden></div>
+        <div class="sigma-rewards__birthday" data-sigma-rewards-birthday hidden></div>
       {%- else -%}
         <p class="sigma-rewards__message">{{ 'rewards.signed_out' | t }}</p>
         <div class="sigma-rewards__actions">
@@ -58,6 +108,9 @@
           <a class="sigma-rewards__link" href="{{ routes.account_login_url }}">{{ 'rewards.sign_in' | t }}</a>
         </div>
       {%- endif -%}
+      <div class="sigma-rewards__vip" data-sigma-rewards-vip hidden></div>
+      <div class="sigma-rewards__redeem" data-sigma-rewards-redeem hidden></div>
+      <div class="sigma-rewards__earn" data-sigma-rewards-earn hidden></div>
     </div>
   </dialog>
 

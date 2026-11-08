@@ -1,6 +1,9 @@
 import db from "../../db.server";
 import logger from "../../logger.server";
 import { deleteCustomer, saveCustomer } from "../customers/customers.server";
+import { markCodesUsed, returnCodePoints } from "../discounts/redeem.server";
+import { awardSignupPoints } from "../earning/account.server";
+import { awardOrderPoints, revokeOrderPoints } from "../earning/orders.server";
 import { saveOrder } from "../orders/orders.server";
 import { deleteShopData, markUninstalled } from "../shops/shops.server";
 
@@ -23,7 +26,10 @@ export const handlers = {
       },
       "Order saved",
     );
-    // TODO(WBS 3.1): award points for this order (idempotent on orderId).
+    const codesUsed = await markCodesUsed(shop, payload);
+    if (codesUsed) logger.info({ shop, orderId: payload.id, codesUsed }, "Reward codes used");
+    // Points are given here unless the shop rewards on fulfilment (idempotent on the order id).
+    await awardOrderPoints(shop, payload, "create");
   },
 
   async ORDERS_FULFILLED({ shop, payload }) {
@@ -39,13 +45,30 @@ export const handlers = {
       },
       "Order saved",
     );
-    // TODO(WBS 3.2): confirm pending points for this order (pending -> available).
+    // Points are given here when the shop rewards on fulfilment (the default).
+    await awardOrderPoints(shop, payload, "fulfilled");
+  },
+
+  async ORDERS_CANCELLED({ shop, payload }) {
+    const result = await saveOrder(shop, payload);
+    logger.info({ shop, orderId: payload.id, orderName: payload.name, result }, "Order saved");
+    const revoked = await revokeOrderPoints(shop, payload.id, "cancel");
+    const codesReturned = await returnCodePoints(shop, payload.id);
+    logger.info({ shop, orderId: payload.id, revoked, codesReturned }, "Cancelled order processed");
+  },
+
+  // Any refund takes back the whole order reward and gives back points spent on the app's codes in
+  // the order, each once (as in the original app).
+  async REFUNDS_CREATE({ shop, payload }) {
+    const revoked = await revokeOrderPoints(shop, payload.order_id, "refund", { refund: payload });
+    const codesReturned = await returnCodePoints(shop, payload.order_id);
+    logger.info({ shop, orderId: payload.order_id, refundId: payload.id, revoked, codesReturned }, "Refund processed");
   },
 
   async CUSTOMERS_CREATE({ shop, payload }) {
     const result = await saveCustomer(shop, payload);
     logger.info({ shop, customerId: payload.id, state: payload.state, result }, "Customer saved");
-    // TODO(earning rules): award the "Create account" points.
+    await awardSignupPoints(shop, payload);
   },
 
   async CUSTOMERS_UPDATE({ shop, payload }) {

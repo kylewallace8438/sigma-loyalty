@@ -7,6 +7,7 @@ import {
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
 import { ensureShop } from "./services/shops/shops.server";
+import { ensureSubscription } from "./services/billing/plan.server";
 import { startCustomerSync } from "./services/customers/sync.server";
 
 const shopify = shopifyApp({
@@ -21,6 +22,8 @@ const shopify = shopifyApp({
   hooks: {
     afterAuth: async ({ session, admin }) => {
       const shop = await ensureShop(session.shop);
+      // Every shop starts on the Free plan (no Shopify charge).
+      await ensureSubscription(shop.id);
       startCustomerSync(admin, shop);
     },
   },

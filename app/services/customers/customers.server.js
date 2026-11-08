@@ -103,6 +103,47 @@ export async function saveCustomer(shopDomain, payload) {
   }
 }
 
+const gid = (shopifyNumericId) => `gid://shopify/Customer/${shopifyNumericId}`;
+
+/** The shop's customer by numeric Shopify id, or null. */
+export function findCustomer(shopDomain, shopifyNumericId) {
+  return db.customer.findFirst({ where: { shop: { domain: shopDomain }, shopifyCustomerId: gid(shopifyNumericId) } });
+}
+
+/**
+ * The customer of an order (the payload's `customer` object), created from it when the app hasn't
+ * synced them yet, as the original app does. An existing row isn't changed: the customers/* webhooks
+ * keep it up to date.
+ */
+export async function ensureOrderCustomer(shopDomain, payloadCustomer) {
+  const existing = await findCustomer(shopDomain, payloadCustomer.id);
+  if (existing) return existing;
+  await saveCustomer(shopDomain, payloadCustomer);
+  return findCustomer(shopDomain, payloadCustomer.id);
+}
+
+/**
+ * A logged-in storefront customer (numeric id from the app proxy), created when the app hasn't synced
+ * them yet. Only customers with an account can log in, so a new row is a member (ENABLED); the
+ * customers/* webhooks and the sync fill in the rest.
+ */
+export async function ensureStorefrontCustomer(shopDomain, shopifyNumericId) {
+  const existing = await findCustomer(shopDomain, shopifyNumericId);
+  if (existing) return existing;
+  try {
+    await db.customer.create({
+      data: {
+        shopifyCustomerId: gid(shopifyNumericId),
+        state: "ENABLED",
+        shop: { connectOrCreate: { where: { domain: shopDomain }, create: { domain: shopDomain } } },
+      },
+    });
+  } catch (err) {
+    if (err.code !== "P2002") throw err; // created at the same moment by a webhook or another request
+  }
+  return findCustomer(shopDomain, shopifyNumericId);
+}
+
 /**
  * Deletes the customer and, by cascade, their points ledger and redeem history. Used for
  * customers/delete and the customers/redact compliance webhook. Returns the number of rows deleted.

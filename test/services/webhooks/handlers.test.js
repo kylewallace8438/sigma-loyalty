@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../../mocks/db";
 import { saveOrder } from "../../../app/services/orders/orders.server";
+import { awardOrderPoints, revokeOrderPoints } from "../../../app/services/earning/orders.server";
+import { awardSignupPoints } from "../../../app/services/earning/account.server";
 import { processWebhookJob } from "../../../app/services/webhooks/handlers.server";
 
 vi.mock("../../../app/services/orders/orders.server", () => ({ saveOrder: vi.fn() }));
+vi.mock("../../../app/services/earning/orders.server", () => ({ awardOrderPoints: vi.fn(), revokeOrderPoints: vi.fn() }));
+vi.mock("../../../app/services/earning/account.server", () => ({ awardSignupPoints: vi.fn() }));
 
 const DOMAIN = "a.myshopify.com";
 const job = (topic, payload = {}) => ({
@@ -16,6 +20,32 @@ beforeEach(() => {
 });
 
 describe("processWebhookJob", () => {
+  it.each([
+    ["ORDERS_CREATE", "create"],
+    ["ORDERS_FULFILLED", "fulfilled"],
+  ])("awards order points for %s", async (topic, event) => {
+    const payload = { id: 1001, name: "#1001" };
+    await processWebhookJob(job(topic, payload));
+    expect(awardOrderPoints).toHaveBeenCalledWith(DOMAIN, payload, event);
+  });
+
+  it("takes back order points on ORDERS_CANCELLED and REFUNDS_CREATE", async () => {
+    await processWebhookJob(job("ORDERS_CANCELLED", { id: 1001, name: "#1001" }));
+    expect(saveOrder).toHaveBeenCalled();
+    expect(revokeOrderPoints).toHaveBeenCalledWith(DOMAIN, 1001, "cancel");
+
+    await processWebhookJob(job("REFUNDS_CREATE", { id: 77, order_id: 1002 }));
+    expect(revokeOrderPoints).toHaveBeenCalledWith(DOMAIN, 1002, "refund", { refund: { id: 77, order_id: 1002 } });
+  });
+
+  it("gives sign-up points on CUSTOMERS_CREATE only", async () => {
+    db.customer.updateMany.mockResolvedValue({ count: 1 });
+    await processWebhookJob(job("CUSTOMERS_UPDATE", { id: 9, updated_at: "2026-11-01T00:00:00Z" }));
+    expect(awardSignupPoints).not.toHaveBeenCalled();
+    await processWebhookJob(job("CUSTOMERS_CREATE", { id: 9, updated_at: "2026-11-01T00:00:00Z" }));
+    expect(awardSignupPoints).toHaveBeenCalledWith(DOMAIN, expect.objectContaining({ id: 9 }));
+  });
+
   it.each(["ORDERS_CREATE", "ORDERS_FULFILLED"])("saves the order for %s", async (topic) => {
     saveOrder.mockResolvedValue("created");
     const payload = { id: 1001, name: "#1001" };
