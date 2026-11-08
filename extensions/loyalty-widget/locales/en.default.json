@@ -1,0 +1,15 @@
+{
+  "rewards": {
+    "open": "Open rewards",
+    "close": "Close rewards",
+    "greeting": "Hi {{ name }}, welcome back!",
+    "greeting_anonymous": "Welcome back!",
+    "balance_label": "Your balance",
+    "points_unit": "points",
+    "load_error": "We couldn't load your points. Try again in a moment.",
+    "excluded": "Your account isn't part of the rewards program.",
+    "signed_out": "Sign in or create an account to earn points and see your balance.",
+    "join": "Join now",
+    "sign_in": "Sign in"
+  }
+}

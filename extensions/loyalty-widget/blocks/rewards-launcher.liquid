@@ -1,0 +1,109 @@
+{% liquid
+  assign logged_in = false
+  if customer
+    assign logged_in = true
+  endif
+%}
+<div
+  class="sigma-rewards"
+  data-sigma-rewards
+  data-logged-in="{{ logged_in }}"
+  data-endpoint="/apps/sigma-loyalty/points"
+  style="--sigma-accent: {{ block.settings.accent_color }}; --sigma-accent-text: {{ block.settings.accent_text_color }};"
+>
+  <dialog
+    class="sigma-rewards__panel"
+    id="sigma-rewards-panel"
+    aria-labelledby="sigma-rewards-title"
+    data-sigma-rewards-panel
+  >
+    <div class="sigma-rewards__header">
+      <h2 class="sigma-rewards__title" id="sigma-rewards-title">{{ block.settings.title | escape }}</h2>
+      <button
+        type="button"
+        class="sigma-rewards__close"
+        aria-label="{{ 'rewards.close' | t }}"
+        data-sigma-rewards-close
+      >
+        <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="sigma-rewards__body">
+      {%- if logged_in -%}
+        <p class="sigma-rewards__greeting">
+          {%- if customer.first_name != blank -%}
+            {{ 'rewards.greeting' | t: name: customer.first_name }}
+          {%- else -%}
+            {{ 'rewards.greeting_anonymous' | t }}
+          {%- endif -%}
+        </p>
+        <div class="sigma-rewards__balance" aria-live="polite">
+          <span class="sigma-rewards__label">{{ 'rewards.balance_label' | t }}</span>
+          <span class="sigma-rewards__points" data-sigma-rewards-points>&ndash;</span>
+          <span class="sigma-rewards__unit">{{ 'rewards.points_unit' | t }}</span>
+        </div>
+        <p class="sigma-rewards__message" data-sigma-rewards-error hidden>
+          {{ 'rewards.load_error' | t }}
+        </p>
+        <p class="sigma-rewards__message" data-sigma-rewards-excluded hidden>
+          {{ 'rewards.excluded' | t }}
+        </p>
+      {%- else -%}
+        <p class="sigma-rewards__message">{{ 'rewards.signed_out' | t }}</p>
+        <div class="sigma-rewards__actions">
+          <a class="sigma-rewards__cta" href="{{ routes.account_register_url }}">{{ 'rewards.join' | t }}</a>
+          <a class="sigma-rewards__link" href="{{ routes.account_login_url }}">{{ 'rewards.sign_in' | t }}</a>
+        </div>
+      {%- endif -%}
+    </div>
+  </dialog>
+
+  <button
+    type="button"
+    class="sigma-rewards__launcher"
+    aria-label="{{ 'rewards.open' | t }}"
+    aria-controls="sigma-rewards-panel"
+    aria-expanded="false"
+    data-sigma-rewards-toggle
+  >
+    <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="8" width="18" height="4" rx="1"/>
+      <path d="M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8"/>
+      <path d="M12 8v13"/>
+      <path d="M12 8c-1.5-3-5-3.5-5.5-1.5S9 8 12 8z"/>
+      <path d="M12 8c1.5-3 5-3.5 5.5-1.5S15 8 12 8z"/>
+    </svg>
+  </button>
+</div>
+
+{% schema %}
+{
+  "name": "Rewards launcher",
+  "target": "body",
+  "javascript": "rewards-launcher.js",
+  "stylesheet": "rewards-launcher.css",
+  "settings": [
+    {
+      "type": "text",
+      "id": "title",
+      "label": "t:settings.title.label",
+      "default": "Rewards"
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "t:settings.accent_color.label",
+      "default": "#5c3bfe"
+    },
+    {
+      "type": "color",
+      "id": "accent_text_color",
+      "label": "t:settings.accent_text_color.label",
+      "default": "#ffffff"
+    }
+  ]
+}
+{% endschema %}

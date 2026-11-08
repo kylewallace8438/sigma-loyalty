@@ -1,0 +1,13 @@
+{
+  "settings": {
+    "title": {
+      "label": "Panel title"
+    },
+    "accent_color": {
+      "label": "Accent color"
+    },
+    "accent_text_color": {
+      "label": "Accent text color"
+    }
+  }
+}

@@ -8,7 +8,7 @@ name = "Sigma Loyalty"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,write_discounts,read_discounts,read_customers"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,write_discounts,read_discounts,read_customers,write_app_proxy"
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
@@ -90,6 +90,12 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   uri = "/webhooks/shop/redact"
   compliance_topics = [ "shop/redact" ]
+
+[app_proxy]
+# Storefront /apps/sigma-loyalty/* is proxied to {application_url}/proxy/*. Handled by: app/routes/proxy.*.jsx
+url = "https://sigma-loyalty.kwapp.store/proxy"
+prefix = "apps"
+subpath = "sigma-loyalty"
 
 [auth]
 redirect_urls = [

@@ -69,3 +69,15 @@ export async function listPointHistory(customerId, { skip = 0, take = 50 } = {})
   ]);
   return { rows, total };
 }
+
+/**
+ * The storefront widget's view of a logged-in customer, by numeric Shopify id. A customer the app
+ * hasn't synced yet has 0 points. Returns { points, pointsEarned, excluded }.
+ */
+export async function getStorefrontBalance(shopDomain, shopifyNumericId) {
+  const customer = await db.customer.findFirst({
+    where: { shop: { domain: shopDomain }, shopifyCustomerId: `gid://shopify/Customer/${shopifyNumericId}` },
+    select: { points: true, pointsEarned: true, excluded: true },
+  });
+  return customer ?? { points: 0, pointsEarned: 0, excluded: false };
+}
