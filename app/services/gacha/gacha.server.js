@@ -32,14 +32,7 @@ export function parseTierForm(formData) {
   return tiers;
 }
 
-/** Saves the tier of each rule in `tiers` ({ ruleId: tier | null }). Rules of other shops are left alone. */
-export async function saveTiers(shopDomain, tiers) {
-  const shop = await ensureShop(shopDomain);
-  await db.$transaction(tierUpdates(shop.id, tiers));
-  logger.info({ shop: shopDomain, rules: Object.keys(tiers).length }, "Gacha tiers saved");
-}
-
-// One updateMany per tier.
+// One updateMany per tier. Rules of other shops are left alone.
 function tierUpdates(shopId, tiers) {
   const byTier = new Map();
   for (const [id, tier] of Object.entries(tiers)) {

@@ -23,7 +23,6 @@ export default function App() {
         <s-link href="/app/earning">Earning rules</s-link>
         <s-link href="/app/discount-rules">Discount rules</s-link>
         <s-link href="/app/vip-tiers">VIP tiers</s-link>
-        <s-link href="/app/gacha">Gacha</s-link>
         <s-link href="/app/gacha-setup">Gacha setup</s-link>
         <s-link href="/app/customers">Customers</s-link>
         <s-link href="/app/settings">Settings</s-link>

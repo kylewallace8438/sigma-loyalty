@@ -6,7 +6,6 @@ import {
   parsePityForm,
   parseTierForm,
   saveGachaSetup,
-  saveTiers,
 } from "../../../app/services/gacha/gacha.server";
 
 const DOMAIN = "a.myshopify.com";
@@ -46,25 +45,6 @@ describe("parseTierForm", () => {
   });
 });
 
-describe("saveTiers", () => {
-  it("updates the shop's rules with one query per tier", async () => {
-    db.shop.upsert.mockResolvedValue({ id: 7, domain: DOMAIN });
-    db.discountRule.updateMany.mockResolvedValue({ count: 1 });
-
-    await saveTiers(DOMAIN, { 1: "WHITE", 2: null, 3: "WHITE" });
-
-    expect(db.discountRule.updateMany).toHaveBeenCalledTimes(2);
-    expect(db.discountRule.updateMany).toHaveBeenCalledWith({
-      where: { shopId: 7, id: { in: [1, 3] } },
-      data: { gachaTier: "WHITE" },
-    });
-    expect(db.discountRule.updateMany).toHaveBeenCalledWith({
-      where: { shopId: 7, id: { in: [2] } },
-      data: { gachaTier: null },
-    });
-  });
-});
-
 describe("getPityValues", () => {
   it("returns the saved guarantees as form values", async () => {
     db.gachaSettings.findFirst.mockResolvedValue({ goldPity: 90, purplePity: null });
@@ -89,16 +69,17 @@ describe("parsePityForm", () => {
 });
 
 describe("saveGachaSetup", () => {
-  it("saves the tiers and upserts the guarantees in one transaction", async () => {
+  it("saves the tiers (one query per tier) and upserts the guarantees in one transaction", async () => {
     db.shop.upsert.mockResolvedValue({ id: 7, domain: DOMAIN });
     db.discountRule.updateMany.mockResolvedValue({ count: 1 });
     db.gachaSettings.upsert.mockResolvedValue({});
 
-    await saveGachaSetup(DOMAIN, { 1: "GOLD", 2: null }, { gold: 90, purple: null });
+    await saveGachaSetup(DOMAIN, { 1: "GOLD", 2: null, 3: "GOLD" }, { gold: 90, purple: null });
 
     expect(db.$transaction).toHaveBeenCalledTimes(1);
+    expect(db.discountRule.updateMany).toHaveBeenCalledTimes(2);
     expect(db.discountRule.updateMany).toHaveBeenCalledWith({
-      where: { shopId: 7, id: { in: [1] } },
+      where: { shopId: 7, id: { in: [1, 3] } },
       data: { gachaTier: "GOLD" },
     });
     expect(db.discountRule.updateMany).toHaveBeenCalledWith({

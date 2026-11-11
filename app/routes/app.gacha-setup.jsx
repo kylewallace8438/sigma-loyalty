@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { useActionData, useFetcher, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { SaveBar, useAppBridge } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { GachaPreview, TierSwatch } from "../components/GachaPreview";
 import { GACHA_TIERS, MAX_PITY, buildPool, effectiveOdds, validatePity } from "../services/gacha/tiers";
+import { DISCOUNT_TYPES } from "../services/discounts/types";
+import { parseRuleForm, saveRule } from "../services/discounts/rules.server";
 import {
   getPityValues,
   listGachaRules,
@@ -23,6 +25,16 @@ export const loader = async ({ request }) => {
 export const action = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const formData = await request.formData();
+
+  // "Create a new discount rule" in the Items dropdown: the page then adds it as an unsaved item.
+  if (formData.get("intent") === "createRule") {
+    const { data, values, errors } = parseRuleForm(formData);
+    if (Object.keys(errors).length) return { values, errors };
+    const result = await saveRule(session.shop, null, data);
+    if (result.errors) return { values, errors: result.errors };
+    return { ruleId: result.rule.id };
+  }
+
   const { pity, errors } = parsePityForm(formData);
   if (Object.keys(errors).length) return { errors };
 
@@ -32,6 +44,7 @@ export const action = async ({ request }) => {
 
 const formatOdds = (percent) => `${Number(percent.toFixed(1))}%`;
 const itemsOf = (rules) => Object.fromEntries(rules.filter((r) => r.tier).map((r) => [r.id, r.tier]));
+const NEW_RULE = "new";
 
 export default function GachaSetup() {
   const { rules, pityValues: savedPity } = useLoaderData();
@@ -41,6 +54,9 @@ export default function GachaSetup() {
   const shopify = useAppBridge();
   const formRef = useRef(null);
   const addRef = useRef(null);
+  const createRule = useFetcher();
+  const ruleFormRef = useRef(null);
+  const ruleModalRef = useRef(null);
 
   const savedItems = useMemo(() => itemsOf(rules), [rules]);
   // The setup as edited on the page: { ruleId: tier } for the gacha items, and the guarantee fields as typed.
@@ -54,8 +70,20 @@ export default function GachaSetup() {
     setPityValues(savedPity);
     setFormVersion((v) => v + 1);
   };
-  // Fresh loader data (after a save): start over from it.
-  useEffect(discard, [savedItems, savedPity]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Start over when the saved setup changes (after a save). Keyed on the values, not the loader's
+  // objects: creating a rule reloads the data too, and that mustn't discard unsaved edits.
+  const savedKey = JSON.stringify([savedItems, savedPity]);
+  useEffect(discard, [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A rule created from the Items dropdown joins the items (White, unsaved), so the save bar opens.
+  useEffect(() => {
+    if (createRule.state !== "idle" || !createRule.data?.ruleId) return;
+    setItems((current) => ({ ...current, [createRule.data.ruleId]: "WHITE" }));
+    ruleModalRef.current?.hideOverlay();
+    ruleFormRef.current?.reset();
+    shopify.toast.show("Rule created. Pick its tier, then save.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createRule.state, createRule.data]);
 
   useEffect(() => {
     if (actionData?.savedAt) shopify.toast.show("Gacha setup saved");
@@ -92,7 +120,8 @@ export default function GachaSetup() {
 
   const addItem = () => {
     const id = addRef.current?.value;
-    if (id) setItems((current) => ({ ...current, [id]: "WHITE" }));
+    if (id === NEW_RULE) ruleModalRef.current?.showOverlay();
+    else if (id) setItems((current) => ({ ...current, [id]: "WHITE" }));
   };
   const removeItem = (id) =>
     setItems((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== String(id))));
@@ -108,6 +137,8 @@ export default function GachaSetup() {
   const saving = navigation.state === "submitting";
 
   const save = () => submit(formRef.current, { method: "post" });
+  const ruleErrors = createRule.data?.errors ?? {};
+  const submitRule = () => createRule.submit(ruleFormRef.current, { method: "post" });
 
   return (
     <s-page heading="Gacha setup" inlineSize="large">
@@ -164,9 +195,10 @@ export default function GachaSetup() {
             save();
           }}
         >
-          <s-section heading="Items">
-            <s-stack gap="base">
-              {otherRules.length > 0 && (
+          {/* A plain form doesn't space its sections like s-page does. */}
+          <s-stack gap="base">
+            <s-section heading="Items">
+              <s-stack gap="base">
                 <s-stack direction="inline" gap="base" alignItems="end">
                   <s-select label="Add a discount rule as an item" ref={addRef}>
                     {otherRules.map((rule) => (
@@ -174,110 +206,171 @@ export default function GachaSetup() {
                         {`${rule.title} (${rule.value})${rule.active ? "" : " · inactive"}`}
                       </s-option>
                     ))}
+                    <s-option value={NEW_RULE}>Create a new discount rule…</s-option>
                   </s-select>
                   <s-button onClick={addItem}>Add item</s-button>
                 </s-stack>
-              )}
 
-              {itemRules.length === 0 ? (
-                <s-paragraph color="subdued">No items yet. Add discount rules above to fill the gacha.</s-paragraph>
-              ) : (
-                <s-table>
-                  <s-table-header-row>
-                    <s-table-header listSlot="primary">Item</s-table-header>
-                    <s-table-header listSlot="labeled">Discount</s-table-header>
-                    <s-table-header listSlot="inline">Status</s-table-header>
-                    <s-table-header>Tier</s-table-header>
-                    <s-table-header>
-                      <s-text accessibilityVisibility="exclusive">Remove</s-text>
-                    </s-table-header>
-                  </s-table-header-row>
-                  <s-table-body>
-                    {itemRules.map((rule) => (
-                      <s-table-row key={rule.id}>
-                        <s-table-cell>
-                          <s-link href={`/app/discount-rules/${rule.id}`}>{rule.title}</s-link>
-                        </s-table-cell>
-                        <s-table-cell>{rule.value}</s-table-cell>
-                        <s-table-cell>
-                          <s-badge tone={rule.active ? "success" : "neutral"}>
-                            {rule.active ? "Active" : "Inactive, not in the pool"}
-                          </s-badge>
-                        </s-table-cell>
-                        <s-table-cell>
-                          <s-select
-                            label={`Tier for ${rule.title}`}
-                            labelAccessibilityVisibility="exclusive"
-                            name={`tier-${rule.id}`}
-                            value={items[rule.id]}
-                          >
-                            {Object.entries(GACHA_TIERS).map(([tier, { label }]) => (
-                              <s-option key={tier} value={tier}>
-                                {label}
-                              </s-option>
-                            ))}
-                          </s-select>
-                        </s-table-cell>
-                        <s-table-cell>
-                          <s-button
-                            variant="tertiary"
-                            icon="delete"
-                            accessibilityLabel={`Remove ${rule.title}`}
-                            onClick={() => removeItem(rule.id)}
-                          />
-                        </s-table-cell>
-                      </s-table-row>
-                    ))}
-                  </s-table-body>
-                </s-table>
-              )}
-              {/* Rules that aren't items are saved as out of the gacha. */}
-              {otherRules.map((rule) => (
-                <input key={rule.id} type="hidden" name={`tier-${rule.id}`} value="" />
-              ))}
-            </s-stack>
-          </s-section>
+                {itemRules.length === 0 ? (
+                  <s-paragraph color="subdued">No items yet. Add discount rules above to fill the gacha.</s-paragraph>
+                ) : (
+                  <s-table>
+                    <s-table-header-row>
+                      <s-table-header listSlot="primary">Item</s-table-header>
+                      <s-table-header listSlot="labeled">Discount</s-table-header>
+                      <s-table-header listSlot="inline">Status</s-table-header>
+                      <s-table-header>Tier</s-table-header>
+                      <s-table-header>
+                        <s-text accessibilityVisibility="exclusive">Remove</s-text>
+                      </s-table-header>
+                    </s-table-header-row>
+                    <s-table-body>
+                      {itemRules.map((rule) => (
+                        <s-table-row key={rule.id}>
+                          <s-table-cell>
+                            <s-link href={`/app/discount-rules/${rule.id}`}>{rule.title}</s-link>
+                          </s-table-cell>
+                          <s-table-cell>{rule.value}</s-table-cell>
+                          <s-table-cell>
+                            <s-badge tone={rule.active ? "success" : "neutral"}>
+                              {rule.active ? "Active" : "Inactive, not in the pool"}
+                            </s-badge>
+                          </s-table-cell>
+                          <s-table-cell>
+                            <s-select
+                              label={`Tier for ${rule.title}`}
+                              labelAccessibilityVisibility="exclusive"
+                              name={`tier-${rule.id}`}
+                              value={items[rule.id]}
+                            >
+                              {Object.entries(GACHA_TIERS).map(([tier, { label }]) => (
+                                <s-option key={tier} value={tier}>
+                                  {label}
+                                </s-option>
+                              ))}
+                            </s-select>
+                          </s-table-cell>
+                          <s-table-cell>
+                            <s-button
+                              variant="tertiary"
+                              icon="delete"
+                              accessibilityLabel={`Remove ${rule.title}`}
+                              onClick={() => removeItem(rule.id)}
+                            />
+                          </s-table-cell>
+                        </s-table-row>
+                      ))}
+                    </s-table-body>
+                  </s-table>
+                )}
+                {/* Rules that aren't items are saved as out of the gacha. */}
+                {otherRules.map((rule) => (
+                  <input key={rule.id} type="hidden" name={`tier-${rule.id}`} value="" />
+                ))}
+              </s-stack>
+            </s-section>
 
-          <s-section heading="Guarantees">
-            <s-stack gap="base">
-              <s-paragraph color="subdued">
-                The most rolls a customer can make before they get an item of that tier. The count starts
-                again each time they get one. Leave empty for no guarantee.
-              </s-paragraph>
-              <s-grid gridTemplateColumns="repeat(auto-fit, minmax(220px, 1fr))" gap="base">
-                <s-number-field
-                  label="Gold guaranteed within"
-                  name="goldPity"
-                  value={pityValues.goldPity}
-                  min={2}
-                  max={MAX_PITY}
-                  step={1}
-                  suffix="rolls"
-                  placeholder="No guarantee"
-                  error={errors.goldPity ?? actionData?.errors?.goldPity}
-                  details={pity.gold && !pool.GOLD.length ? "No active Gold items, so this doesn't apply yet." : undefined}
-                ></s-number-field>
-                <s-number-field
-                  label="Purple or better guaranteed within"
-                  name="purplePity"
-                  value={pityValues.purplePity}
-                  min={2}
-                  max={MAX_PITY}
-                  step={1}
-                  suffix="rolls"
-                  placeholder="No guarantee"
-                  error={errors.purplePity ?? actionData?.errors?.purplePity}
-                  details={
-                    pity.purple && !pool.PURPLE.length && !pool.GOLD.length
-                      ? "No active Purple or Gold items, so this doesn't apply yet."
-                      : undefined
-                  }
-                ></s-number-field>
-              </s-grid>
-            </s-stack>
-          </s-section>
+            <s-section heading="Guarantees">
+              <s-stack gap="base">
+                <s-paragraph color="subdued">
+                  The most rolls a customer can make before they get an item of that tier. The count starts
+                  again each time they get one. Leave empty for no guarantee.
+                </s-paragraph>
+                <s-grid gridTemplateColumns="repeat(auto-fit, minmax(220px, 1fr))" gap="base">
+                  <s-number-field
+                    label="Gold guaranteed within"
+                    name="goldPity"
+                    value={pityValues.goldPity}
+                    min={2}
+                    max={MAX_PITY}
+                    step={1}
+                    suffix="rolls"
+                    placeholder="No guarantee"
+                    error={errors.goldPity ?? actionData?.errors?.goldPity}
+                    details={pity.gold && !pool.GOLD.length ? "No active Gold items, so this doesn't apply yet." : undefined}
+                  ></s-number-field>
+                  <s-number-field
+                    label="Purple or better guaranteed within"
+                    name="purplePity"
+                    value={pityValues.purplePity}
+                    min={2}
+                    max={MAX_PITY}
+                    step={1}
+                    suffix="rolls"
+                    placeholder="No guarantee"
+                    error={errors.purplePity ?? actionData?.errors?.purplePity}
+                    details={
+                      pity.purple && !pool.PURPLE.length && !pool.GOLD.length
+                        ? "No active Purple or Gold items, so this doesn't apply yet."
+                        : undefined
+                    }
+                  ></s-number-field>
+                </s-grid>
+              </s-stack>
+            </s-section>
+          </s-stack>
         </form>
       )}
+
+      <s-modal id="gacha-new-rule-modal" ref={ruleModalRef} heading="Create discount rule">
+        <createRule.Form method="post" ref={ruleFormRef}>
+          <input type="hidden" name="intent" value="createRule" />
+          {/* Same defaults as a new rule on the rules page; edit the rule there for a minimum or limits. */}
+          <input type="hidden" name="active" value="true" />
+          <input type="hidden" name="appliesOncePerCustomer" value="true" />
+          <s-stack gap="base">
+            {ruleErrors.form && <s-banner tone="critical">{ruleErrors.form}</s-banner>}
+            <s-text-field
+              label="Title"
+              name="title"
+              placeholder="$5 off your next order"
+              error={ruleErrors.title}
+              required
+            ></s-text-field>
+            <s-number-field
+              label="Points cost"
+              name="pointsCost"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              suffix="points"
+              error={ruleErrors.pointsCost}
+              required
+            ></s-number-field>
+            <s-select label="Discount type" name="discountType" error={ruleErrors.discountType}>
+              {Object.entries(DISCOUNT_TYPES).map(([value, label]) => (
+                <s-option key={value} value={value}>
+                  {String(label)}
+                </s-option>
+              ))}
+            </s-select>
+            <s-number-field
+              label="Discount value"
+              name="discountValue"
+              min={0}
+              step={0.01}
+              inputMode="decimal"
+              details="Amount in store currency for fixed amount, 1–100 for percentage. Ignored for free shipping."
+              error={ruleErrors.discountValue}
+            ></s-number-field>
+            <s-paragraph color="subdued">
+              The rule is active and limited to one use per customer. Set a minimum subtotal or usage limit
+              on the rule&apos;s page.
+            </s-paragraph>
+          </s-stack>
+        </createRule.Form>
+        <s-button
+          slot="primary-action"
+          variant="primary"
+          onClick={submitRule}
+          loading={createRule.state !== "idle" || undefined}
+        >
+          Create and add
+        </s-button>
+        <s-button slot="secondary-actions" commandFor="gacha-new-rule-modal" command="--hide">
+          Cancel
+        </s-button>
+      </s-modal>
     </s-page>
   );
 }

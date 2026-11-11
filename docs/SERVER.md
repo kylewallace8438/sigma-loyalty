@@ -87,8 +87,11 @@ To print the live route table: `npx react-router routes`.
 
 - **Logs**: `tail -f logs/current.log | npx pino-pretty`, or `docker logs -f sigma-loyalty-app-dev` / `sigma-loyalty-app`.
 - **New migration** (dev): edit `prisma/schema.prisma`, then on the host run `npx prisma migrate dev --name <change>` (DB on `127.0.0.1:3308`), then `docker restart sigma-loyalty-app-dev`. Both containers run `prisma generate` and `prisma migrate deploy` on start; until the dev container restarts, its Prisma Client doesn't know the new models (`db.<model>` is `undefined`).
-- **Added an npm dependency**: dev keeps `node_modules` in the `app-node-modules` volume, so rebuild it with
+- **Added an npm dependency**: dev keeps `node_modules` in the `app-node-modules` volume, so a host `npm install` doesn't reach it (`Cannot find module '<pkg>'`). Install from the lockfile inside the container and restart:
+  `docker exec sigma-loyalty-app-dev npm ci && docker restart sigma-loyalty-app-dev`.
+  If the container isn't running, rebuild the volume instead:
   `docker compose --profile dev down && docker volume rm sigma-loyalty_app-node-modules && npm run compose:dev`.
+- **Changed `docker-compose.yml`, `.env` or the `Dockerfile`**: a container keeps the environment and image it was created with, so `docker restart` isn't enough. Recreate it with `docker compose --profile dev up -d --build app-dev` (this also runs any pending migrations).
 - **Test a webhook** without placing an order:
   ```bash
   shopify app webhook trigger --topic orders/create --api-version 2026-07 \
